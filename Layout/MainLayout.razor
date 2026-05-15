@@ -59,8 +59,8 @@
             <MudNavLink Icon="@Icons.Material.Filled.AccountBalance" IconColor="Color.Success" Href="konten">Konten</MudNavLink>
             <MudNavLink Icon="@Icons.Material.Filled.Receipt" IconColor="Color.Info" Href="transaktionen">Transaktionen</MudNavLink>
             <MudNavLink Icon="@Icons.Material.Filled.Category" IconColor="Color.Warning" Href="categories">Kategorien</MudNavLink>
-            <MudNavLink Icon="@Icons.Material.Filled.TrendingUp" IconColor="Color.Tertiary">Budgets</MudNavLink>
-            <MudNavLink Icon="@Icons.Material.Filled.BarChart" IconColor="Color.Secondary">Analysen</MudNavLink>
+            <MudNavLink Icon="@Icons.Material.Filled.TrendingUp" IconColor="Color.Tertiary" Href="budgets">Budgets</MudNavLink>
+            <MudNavLink Icon="@Icons.Material.Filled.BarChart" IconColor="Color.Secondary" Href="analysis">Analysen</MudNavLink>
             
             <MudDivider Class="my-2" />
             
@@ -76,6 +76,14 @@
                 <MudNavLink Icon="@Icons.Material.Filled.Security">Sicherheit</MudNavLink>
             </MudNavGroup>
         </MudNavMenu>
+        
+        <MudSpacer />
+            
+        <MudDivider />
+            
+        <MudText Typo="Typo.caption" Color="Color.Primary" Class="pa-3">
+            © @DateTime.Now.Year Lucas Nagelsmann
+        </MudText>
     </MudDrawer>
     
     <MudMainContent Class="pt-4" Style="margin-top: 50px">

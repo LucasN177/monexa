@@ -1,0 +1,555 @@
+@page "/analysis"
+
+<PageTitle>Budget-Analyse</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="pa-4">
+
+    @* ── Header ── *@
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6">
+        <MudStack Spacing="0">
+            <MudText Typo="Typo.h4">
+                <MudIcon Icon="@Icons.Material.Filled.BarChart" Class="mr-2 mb-1" />
+                Budget-Analyse
+            </MudText>
+            <MudText Typo="Typo.body2" Color="Color.Primary">
+                Detaillierte Auswertung deiner Ausgaben
+            </MudText>
+        </MudStack>
+
+        @* Zeitraum-Picker *@
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft"
+                           Variant="Variant.Outlined"
+                           Size="Size.Small"
+                           OnClick="PreviousMonth" />
+            <MudText Typo="Typo.subtitle1" Style="min-width:140px; text-align:center;">
+                @_currentMonth.ToString("MMMM yyyy")
+            </MudText>
+            <MudIconButton Icon="@Icons.Material.Filled.ChevronRight"
+                           Variant="Variant.Outlined"
+                           Size="Size.Small"
+                           OnClick="NextMonth"
+                           Disabled="@(_currentMonth.Month == DateTime.Now.Month && _currentMonth.Year == DateTime.Now.Year)" />
+        </MudStack>
+    </MudStack>
+
+    @* ── KPI Row ── *@
+    <MudGrid Class="mb-6">
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4">
+                <MudStack Spacing="1">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                        <MudText Typo="Typo.caption" Color="Color.Primary">GESAMTBUDGET</MudText>
+                        <MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" Size="Size.Small" Color="Color.Primary" />
+                    </MudStack>
+                    <MudText Typo="Typo.h5">@FormatCurrency(TotalBudget)</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Primary">@_budgets.Count Kategorien</MudText>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4">
+                <MudStack Spacing="1">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                        <MudText Typo="Typo.caption" Color="Color.Primary">AUSGEGEBEN</MudText>
+                        <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Size="Size.Small" Color="Color.Error" />
+                    </MudStack>
+                    <MudText Typo="Typo.h5" Color="Color.Error">@FormatCurrency(TotalSpent)</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Primary">@SpentPercent.ToString("0")% des Budgets</MudText>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4">
+                <MudStack Spacing="1">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                        <MudText Typo="Typo.caption" Color="Color.Primary">VERBLEIBEND</MudText>
+                        <MudIcon Icon="@Icons.Material.Filled.Savings" Size="Size.Small" Color="Color.Success" />
+                    </MudStack>
+                    <MudText Typo="Typo.h5" Color="Color.Success">@FormatCurrency(TotalRemaining)</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Primary">noch verfügbar</MudText>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4">
+                <MudStack Spacing="1">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                        <MudText Typo="Typo.caption" Color="Color.Primary">ÜBERSCHREITUNGEN</MudText>
+                        <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" Color="Color.Warning" />
+                    </MudStack>
+                    <MudText Typo="Typo.h5" Color="Color.Warning">@OverBudgetCount</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Primary">
+                        @(OverBudgetCount == 1 ? "Kategorie" : "Kategorien") über Limit
+                    </MudText>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @* ── Gesamtfortschritt ── *@
+    <MudPaper Elevation="0" Outlined="true" Class="pa-4 mb-6">
+        <MudStack Spacing="2">
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.subtitle1">Gesamtfortschritt</MudText>
+                <MudText Typo="Typo.subtitle2" Color="@(SpentPercent >= 100 ? Color.Error : SpentPercent >= 80 ? Color.Warning : Color.Success)">
+                    @SpentPercent.ToString("0.0")%
+                </MudText>
+            </MudStack>
+            <MudProgressLinear Value="@Math.Min(SpentPercent, 100)"
+                               Color="@(SpentPercent >= 100 ? Color.Error : SpentPercent >= 80 ? Color.Warning : Color.Success)"
+                               Rounded="true"
+                               Size="Size.Large" />
+            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                <MudText Typo="Typo.caption" Color="Color.Primary">0 €</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Primary">@FormatCurrency(TotalBudget)</MudText>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+
+    @* ── Haupt-Inhalt: Tabelle + Seitenleiste ── *@
+    <MudGrid>
+
+        @* ── Kategorie-Tabelle ── *@
+        <MudItem xs="12" md="8">
+            <MudPaper Elevation="0" Outlined="true">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="pa-4 pb-0">
+                    <MudText Typo="Typo.subtitle1">Kategorien im Detail</MudText>
+                    <MudStack Row="true" Spacing="1">
+                        <MudChip T="string" Size="Size.Small"
+                                 Color="@(_tableFilter == "all" ? Color.Primary : Color.Default)"
+                                 Variant="@(_tableFilter == "all" ? Variant.Filled : Variant.Outlined)"
+                                 OnClick="@(() => _tableFilter = "all")">
+                            Alle
+                        </MudChip>
+                        <MudChip T="string" Size="Size.Small"
+                                 Color="@(_tableFilter == "over" ? Color.Error : Color.Default)"
+                                 Variant="@(_tableFilter == "over" ? Variant.Filled : Variant.Outlined)"
+                                 OnClick="@(() => _tableFilter = "over")">
+                            Überschritten
+                        </MudChip>
+                        <MudChip T="string" Size="Size.Small"
+                                 Color="@(_tableFilter == "ok" ? Color.Success : Color.Default)"
+                                 Variant="@(_tableFilter == "ok" ? Variant.Filled : Variant.Outlined)"
+                                 OnClick="@(() => _tableFilter = "ok")">
+                            Im Rahmen
+                        </MudChip>
+                    </MudStack>
+                </MudStack>
+
+                <MudTable Items="@FilteredTableBudgets"
+                          Hover="true"
+                          Dense="true"
+                          Breakpoint="Breakpoint.Sm"
+                          Elevation="0"
+                          Class="mt-2">
+                    <HeaderContent>
+                        <MudTh>Kategorie</MudTh>
+                        <MudTh Style="text-align:right">Budget</MudTh>
+                        <MudTh Style="text-align:right">Ausgegeben</MudTh>
+                        <MudTh Style="text-align:right">Rest</MudTh>
+                        <MudTh Style="min-width:120px">Auslastung</MudTh>
+                        <MudTh Style="text-align:center">Status</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Kategorie">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudAvatar Color="@context.AvatarColor" Size="Size.Small" Variant="Variant.Filled">
+                                    <MudIcon Icon="@context.Icon" Size="Size.Small" />
+                                </MudAvatar>
+                                <MudText Typo="Typo.body2">@context.Name</MudText>
+                            </MudStack>
+                        </MudTd>
+                        <MudTd DataLabel="Budget" Style="text-align:right">
+                            <MudText Typo="Typo.body2">@FormatCurrency(context.Limit)</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Ausgegeben" Style="text-align:right">
+                            <MudText Typo="Typo.body2" Color="@(context.Spent > context.Limit ? Color.Error : Color.Default)">
+                                @FormatCurrency(context.Spent)
+                            </MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Rest" Style="text-align:right">
+                            @{
+                                var rem = context.Limit - context.Spent;
+                            }
+                            <MudText Typo="Typo.body2" Color="@(rem < 0 ? Color.Error : Color.Success)">
+                                @FormatCurrency(rem)
+                            </MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Auslastung">
+                            @{
+                                var pct = context.Limit > 0 ? (double)context.Spent / (double)context.Limit * 100 : 0;
+                                var col = pct >= 100 ? Color.Error : pct >= 80 ? Color.Warning : Color.Success;
+                            }
+                            <MudStack Spacing="1">
+                                <MudProgressLinear Value="@Math.Min(pct, 100)"
+                                                   Color="@col"
+                                                   Rounded="true"
+                                                   Size="Size.Small" />
+                                <MudText Typo="Typo.caption" Color="@col">@pct.ToString("0")%</MudText>
+                            </MudStack>
+                        </MudTd>
+                        <MudTd DataLabel="Status" Style="text-align:center">
+                            @{
+                                var p = context.Limit > 0 ? (double)context.Spent / (double)context.Limit * 100 : 0;
+                            }
+                            @if (p >= 100)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
+                                         Icon="@Icons.Material.Filled.ErrorOutline">
+                                    Überzogen
+                                </MudChip>
+                            }
+                            else if (p >= 80)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled"
+                                         Icon="@Icons.Material.Filled.WarningAmber">
+                                    Kritisch
+                                </MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text"
+                                         Icon="@Icons.Material.Filled.CheckCircleOutline">
+                                    OK
+                                </MudChip>
+                            }
+                        </MudTd>
+                    </RowTemplate>
+                    <FooterContent>
+                        <MudTd colspan="1">
+                            <MudText Typo="Typo.subtitle2">Gesamt</MudText>
+                        </MudTd>
+                        <MudTd Style="text-align:right">
+                            <MudText Typo="Typo.subtitle2">@FormatCurrency(TotalBudget)</MudText>
+                        </MudTd>
+                        <MudTd Style="text-align:right">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Error">@FormatCurrency(TotalSpent)</MudText>
+                        </MudTd>
+                        <MudTd Style="text-align:right">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Success">@FormatCurrency(TotalRemaining)</MudText>
+                        </MudTd>
+                        <MudTd colspan="2" />
+                    </FooterContent>
+                </MudTable>
+            </MudPaper>
+        </MudItem>
+
+        @* ── Seitenleiste: Top-Ausgaben + Insights ── *@
+        <MudItem xs="12" md="4">
+            <MudStack Spacing="4">
+
+                @* Top-Ausgaben *@
+                <MudPaper Elevation="0" Outlined="true" Class="pa-4">
+                    <MudText Typo="Typo.subtitle1" Class="mb-3">Top-Ausgaben</MudText>
+                    <MudList T="BudgetItem" Dense="true" DisablePadding="true">
+                        @foreach (var (item, rank) in TopSpenders)
+                        {
+                            var pct = item.Limit > 0 ? (double)item.Spent / (double)item.Limit * 100 : 0;
+                            <MudListItem T="BudgetItem" Dense="true" Class="px-0">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudText Typo="Typo.caption" Color="Color.Primary" Style="min-width:16px">
+                                        @rank
+                                    </MudText>
+                                    <MudAvatar Color="@item.AvatarColor" Size="Size.Small" Variant="Variant.Filled">
+                                        <MudIcon Icon="@item.Icon" Size="Size.Small" />
+                                    </MudAvatar>
+                                    <MudStack Spacing="0" Class="flex-grow-1">
+                                        <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                            <MudText Typo="Typo.body2">@item.Name</MudText>
+                                            <MudText Typo="Typo.body2" Color="@(item.Spent > item.Limit ? Color.Error : Color.Default)">
+                                                @FormatCurrency(item.Spent)
+                                            </MudText>
+                                        </MudStack>
+                                        <MudProgressLinear Value="@Math.Min(pct, 100)"
+                                                           Color="@(pct >= 100 ? Color.Error : pct >= 80 ? Color.Warning : Color.Success)"
+                                                           Rounded="true"
+                                                           Size="Size.Small" />
+                                    </MudStack>
+                                </MudStack>
+                            </MudListItem>
+                        }
+                    </MudList>
+                </MudPaper>
+
+                @* Insights *@
+                <MudPaper Elevation="0" Outlined="true" Class="pa-4">
+                    <MudText Typo="Typo.subtitle1" Class="mb-3">Insights</MudText>
+                    <MudStack Spacing="2">
+                        @foreach (var insight in Insights)
+                        {
+                            <MudAlert Severity="@insight.Severity"
+                                      Dense="true"
+                                      Variant="Variant.Text"
+                                      Icon="@insight.Icon">
+                                @insight.Text
+                            </MudAlert>
+                        }
+                    </MudStack>
+                </MudPaper>
+
+                @* Monatsvergleich *@
+                <MudPaper Elevation="0" Outlined="true" Class="pa-4">
+                    <MudText Typo="Typo.subtitle1" Class="mb-3">Monatsvergleich</MudText>
+                    <MudStack Spacing="3">
+                        @foreach (var entry in MonthlyComparison)
+                        {
+                            <MudStack Spacing="1">
+                                <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                    <MudText Typo="Typo.caption" Color="Color.Primary">@entry.Label</MudText>
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                        <MudText Typo="Typo.caption">@FormatCurrency(entry.Amount)</MudText>
+                                        @if (entry.DeltaPercent != 0)
+                                        {
+                                            <MudIcon Icon="@(entry.DeltaPercent > 0 ? Icons.Material.Filled.ArrowUpward : Icons.Material.Filled.ArrowDownward)"
+                                                     Size="Size.Small"
+                                                     Color="@(entry.DeltaPercent > 0 ? Color.Error : Color.Success)" />
+                                            <MudText Typo="Typo.caption"
+                                                     Color="@(entry.DeltaPercent > 0 ? Color.Error : Color.Success)">
+                                                @Math.Abs(entry.DeltaPercent).ToString("0")%
+                                            </MudText>
+                                        }
+                                    </MudStack>
+                                </MudStack>
+                                <MudProgressLinear Value="@entry.FillPercent"
+                                                   Color="Color.Primary"
+                                                   Rounded="true"
+                                                   Size="Size.Small" />
+                            </MudStack>
+                        }
+                    </MudStack>
+                </MudPaper>
+
+            </MudStack>
+        </MudItem>
+    </MudGrid>
+
+    @* ── Transaktionen (expandierbar pro Kategorie) ── *@
+    <MudText Typo="Typo.subtitle1" Class="mt-6 mb-3">Transaktionen nach Kategorie</MudText>
+    @foreach (var budget in _budgets)
+    {
+        <MudExpansionPanel Class="mb-2" Elevation="0">
+            <TitleContent>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+                    <MudAvatar Color="@budget.AvatarColor" Size="Size.Small" Variant="Variant.Filled">
+                        <MudIcon Icon="@budget.Icon" Size="Size.Small" />
+                    </MudAvatar>
+                    <MudText Typo="Typo.subtitle2">@budget.Name</MudText>
+                    <MudSpacer />
+                    <MudText Typo="Typo.body2" Color="Color.Primary">
+                        @budget.Transactions.Count Transaktionen
+                    </MudText>
+                    <MudText Typo="Typo.body2" Color="@(budget.Spent > budget.Limit ? Color.Error : Color.Default)">
+                        @FormatCurrency(budget.Spent)
+                    </MudText>
+                </MudStack>
+            </TitleContent>
+            <ChildContent>
+                <MudTable Items="@budget.Transactions"
+                          Dense="true"
+                          Hover="true"
+                          Elevation="0"
+                          Breakpoint="Breakpoint.Xs">
+                    <HeaderContent>
+                        <MudTh>Datum</MudTh>
+                        <MudTh>Beschreibung</MudTh>
+                        <MudTh Style="text-align:right">Betrag</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Datum">
+                            <MudText Typo="Typo.body2" Color="Color.Primary">
+                                @context.Date.ToString("dd.MM.yyyy")
+                            </MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Beschreibung">
+                            <MudText Typo="Typo.body2">@context.Description</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Betrag" Style="text-align:right">
+                            <MudText Typo="Typo.body2" Color="Color.Error">
+                                @FormatCurrency(context.Amount)
+                            </MudText>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </ChildContent>
+        </MudExpansionPanel>
+    }
+
+</MudContainer>
+
+@code {
+
+    // ── Models ────────────────────────────────────────────────────────────────
+
+    private class Transaction
+    {
+        public DateTime Date { get; set; }
+        public string Description { get; set; } = string.Empty;
+        public decimal Amount { get; set; }
+    }
+
+    private class BudgetItem
+    {
+        public string Name { get; set; } = string.Empty;
+        public decimal Limit { get; set; }
+        public decimal Spent { get; set; }
+        public string Icon { get; set; } = Icons.Material.Filled.Category;
+        public Color AvatarColor { get; set; } = Color.Primary;
+        public List<Transaction> Transactions { get; set; } = new();
+    }
+
+    private record InsightItem(string Text, Severity Severity, string Icon);
+
+    private record MonthEntry(string Label, decimal Amount, double DeltaPercent, double FillPercent);
+
+    // ── State ─────────────────────────────────────────────────────────────────
+
+    private DateTime _currentMonth = new(DateTime.Now.Year, DateTime.Now.Month, 1);
+    private string _tableFilter = "all";
+
+    private List<BudgetItem> _budgets = new()
+    {
+        new()
+        {
+            Name = "Lebensmittel", Limit = 400, Spent = 320,
+            Icon = Icons.Material.Filled.LocalGroceryStore, AvatarColor = Color.Success,
+            Transactions = new()
+            {
+                new() { Date = new DateTime(2025,5,3),  Description = "REWE",        Amount = 62.40m },
+                new() { Date = new DateTime(2025,5,7),  Description = "Aldi",         Amount = 38.10m },
+                new() { Date = new DateTime(2025,5,12), Description = "Lidl",         Amount = 55.90m },
+                new() { Date = new DateTime(2025,5,18), Description = "Edeka",        Amount = 81.20m },
+                new() { Date = new DateTime(2025,5,22), Description = "Wochenmarkt",  Amount = 28.50m },
+                new() { Date = new DateTime(2025,5,27), Description = "REWE",         Amount = 53.90m },
+            }
+        },
+        new()
+        {
+            Name = "Transport", Limit = 150, Spent = 162,
+            Icon = Icons.Material.Filled.DirectionsCar, AvatarColor = Color.Warning,
+            Transactions = new()
+            {
+                new() { Date = new DateTime(2025,5,2),  Description = "Tankstelle Shell",   Amount = 72.00m },
+                new() { Date = new DateTime(2025,5,14), Description = "VVS Monatsticket",   Amount = 49.00m },
+                new() { Date = new DateTime(2025,5,20), Description = "Parkhaus Stadtmitte", Amount = 14.00m },
+                new() { Date = new DateTime(2025,5,25), Description = "Tankstelle Aral",    Amount = 27.00m },
+            }
+        },
+        new()
+        {
+            Name = "Freizeit", Limit = 200, Spent = 85,
+            Icon = Icons.Material.Filled.SportsEsports, AvatarColor = Color.Primary,
+            Transactions = new()
+            {
+                new() { Date = new DateTime(2025,5,5),  Description = "Netflix",      Amount = 13.99m },
+                new() { Date = new DateTime(2025,5,5),  Description = "Spotify",      Amount = 9.99m  },
+                new() { Date = new DateTime(2025,5,10), Description = "Kino",         Amount = 18.50m },
+                new() { Date = new DateTime(2025,5,19), Description = "Steam",        Amount = 29.99m },
+                new() { Date = new DateTime(2025,5,23), Description = "Bowling",      Amount = 12.50m },
+            }
+        },
+        new()
+        {
+            Name = "Restaurants", Limit = 180, Spent = 175,
+            Icon = Icons.Material.Filled.Restaurant, AvatarColor = Color.Error,
+            Transactions = new()
+            {
+                new() { Date = new DateTime(2025,5,4),  Description = "Vapiano",       Amount = 28.60m },
+                new() { Date = new DateTime(2025,5,9),  Description = "McDonald's",    Amount = 11.40m },
+                new() { Date = new DateTime(2025,5,15), Description = "La Piazza",     Amount = 54.80m },
+                new() { Date = new DateTime(2025,5,21), Description = "Döner Kebab",   Amount = 9.50m  },
+                new() { Date = new DateTime(2025,5,26), Description = "Sushi Bar",     Amount = 70.70m },
+            }
+        },
+        new()
+        {
+            Name = "Gesundheit", Limit = 100, Spent = 30,
+            Icon = Icons.Material.Filled.HealthAndSafety, AvatarColor = Color.Info,
+            Transactions = new()
+            {
+                new() { Date = new DateTime(2025,5,8), Description = "Apotheke",      Amount = 18.90m },
+                new() { Date = new DateTime(2025,5,16), Description = "Fitnessstudio", Amount = 11.10m },
+            }
+        },
+        new()
+        {
+            Name = "Kleidung", Limit = 120, Spent = 140,
+            Icon = Icons.Material.Filled.Checkroom, AvatarColor = Color.Primary,
+            Transactions = new()
+            {
+                new() { Date = new DateTime(2025,5,6),  Description = "Zara",          Amount = 64.95m },
+                new() { Date = new DateTime(2025,5,13), Description = "H&M Online",    Amount = 39.90m },
+                new() { Date = new DateTime(2025,5,24), Description = "Deichmann",     Amount = 35.15m },
+            }
+        },
+    };
+
+    // ── Computed ──────────────────────────────────────────────────────────────
+
+    private decimal TotalBudget    => _budgets.Sum(b => b.Limit);
+    private decimal TotalSpent     => _budgets.Sum(b => b.Spent);
+    private decimal TotalRemaining => TotalBudget - TotalSpent;
+    private double  SpentPercent   => TotalBudget > 0 ? (double)TotalSpent / (double)TotalBudget * 100 : 0;
+    private int     OverBudgetCount => _budgets.Count(b => b.Spent > b.Limit);
+
+    private IEnumerable<BudgetItem> FilteredTableBudgets => _tableFilter switch
+    {
+        "over" => _budgets.Where(b => b.Spent > b.Limit),
+        "ok"   => _budgets.Where(b => b.Spent <= b.Limit),
+        _      => _budgets
+    };
+
+    private IEnumerable<(BudgetItem item, int rank)> TopSpenders =>
+        _budgets.OrderByDescending(b => b.Spent)
+                .Take(4)
+                .Select((b, i) => (b, i + 1));
+
+    private IEnumerable<InsightItem> Insights
+    {
+        get
+        {
+            var list = new List<InsightItem>();
+
+            if (OverBudgetCount > 0)
+                list.Add(new($"{OverBudgetCount} {(OverBudgetCount == 1 ? "Kategorie überschreitet" : "Kategorien überschreiten")} das Budget.",
+                    Severity.Error, Icons.Material.Filled.ErrorOutline));
+
+            var critical = _budgets.Where(b => { var p = b.Limit > 0 ? (double)b.Spent / (double)b.Limit * 100 : 0; return p >= 80 && p < 100; }).ToList();
+            if (critical.Any())
+                list.Add(new($"{string.Join(", ", critical.Select(b => b.Name))} nähert sich dem Limit.",
+                    Severity.Warning, Icons.Material.Filled.WarningAmber));
+
+            var best = _budgets.OrderBy(b => b.Limit > 0 ? (double)b.Spent / (double)b.Limit : 0).FirstOrDefault();
+            if (best is not null)
+                list.Add(new($"Beste Kontrolle: {best.Name} ({((double)best.Spent / (double)best.Limit * 100):0}% genutzt).",
+                    Severity.Success, Icons.Material.Filled.EmojiEvents));
+
+            if (TotalRemaining > 0)
+                list.Add(new($"Du hast noch {FormatCurrency(TotalRemaining)} für den Monat übrig.",
+                    Severity.Info, Icons.Material.Filled.Info));
+
+            return list;
+        }
+    }
+
+    // Mockdaten für den Monatsvergleich (Vormonat)
+    private IEnumerable<MonthEntry> MonthlyComparison => new List<MonthEntry>
+    {
+        new("Aktueller Monat", TotalSpent,  +8,  SpentPercent),
+        new("Vormonat",        835.00m,     0,   (double)835m / (double)TotalBudget * 100),
+        new("Ø letzte 3 Mon.", 790.00m,     0,   (double)790m / (double)TotalBudget * 100),
+    };
+
+    // ── Navigation ────────────────────────────────────────────────────────────
+
+    private void PreviousMonth() =>
+        _currentMonth = _currentMonth.AddMonths(-1);
+
+    private void NextMonth() =>
+        _currentMonth = _currentMonth.AddMonths(1);
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static string FormatCurrency(decimal value) =>
+        value.ToString("C2", new System.Globalization.CultureInfo("de-DE"));
+}
