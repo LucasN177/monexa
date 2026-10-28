@@ -1,0 +1,171 @@
+@page "/konten/{Id:guid}"
+@inherits FinancePage
+
+<PageTitle>@(account?.Name ?? "Konto") – MonExA</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-8">
+    @if (account == null)
+    {
+        <EmptyState Title="Konto nicht gefunden" Text="Das Konto existiert nicht (mehr) oder gehört zu einem anderen Projekt.">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="konten">Zur Kontenübersicht</MudButton>
+        </EmptyState>
+    }
+    else
+    {
+        <PageHeader Title="@account.Name" Icon="@AccountTypeIcon(account.Type)" BackHref="konten"
+                    Subtitle="@($"{AccountTypeText(account.Type)} · {account.BankName}{(string.IsNullOrEmpty(account.IBAN) ? "" : " · " + account.IBAN)}")">
+            <Actions>
+                @if (!account.IsActive)
+                {
+                    <MudChip T="string" Color="Color.Default" Size="Size.Small">Inaktiv</MudChip>
+                }
+                @if (Finance.CanEdit)
+                {
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Edit" Href="@($"konten/{account.Id}/bearbeiten")">Bearbeiten</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="@($"transaktionen/neu?konto={account.Id}")">Buchung</MudButton>
+                }
+            </Actions>
+        </PageHeader>
+
+        <MudGrid Class="mb-4">
+            <MudItem xs="12" sm="6" md="3">
+                <StatCard Title="Kontostand" Value="@Money(account.Balance)" ValueColor="@(account.Balance >= 0 ? Color.Success : Color.Error)"
+                          Caption="@($"Anfangssaldo {Money(account.OpeningBalance)}")" Icon="@Icons.Material.Filled.AccountBalanceWallet" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <StatCard Title="Zuflüsse (Monat)" Value="@Money(_inflow)" ValueColor="Color.Success" Icon="@Icons.Material.Filled.CallReceived" IconColor="Color.Success" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <StatCard Title="Abflüsse (Monat)" Value="@Money(_outflow)" ValueColor="Color.Error" Icon="@Icons.Material.Filled.CallMade" IconColor="Color.Error" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <StatCard Title="Buchungen" Value="@_rows.Count.ToString()" Caption="@(_rows.Any() ? $"seit {Date(_rows.Last().Transaction.Date)}" : "noch keine")"
+                          Icon="@Icons.Material.Filled.Receipt" IconColor="Color.Info" />
+            </MudItem>
+        </MudGrid>
+
+        <MudPaper Elevation="0" Outlined="true" Class="pa-4 mb-4">
+            <MudText Typo="Typo.h6">Saldoverlauf (12 Monate)</MudText>
+            <MudChart ChartType="ChartType.Line" ChartSeries="@_series" XAxisLabels="@_labels" ChartOptions="@_options" Width="100%" Height="260px" />
+        </MudPaper>
+
+        @if (!string.IsNullOrWhiteSpace(account.Description))
+        {
+            <MudAlert Severity="Severity.Normal" Variant="Variant.Outlined" Dense="true" Class="mb-4" Icon="@Icons.Material.Filled.Notes">@account.Description</MudAlert>
+        }
+
+        <MudTable Items="@_rows" Dense="true" Hover="true" Elevation="0" Outlined="true" Breakpoint="Breakpoint.Sm"
+                  RowsPerPage="25" Filter="@FilterRow"
+                  OnRowClick="@((TableRowClickEventArgs<Row> e) => Navigation.NavigateTo($"transaktionen/{e.Item!.Transaction.Id}/bearbeiten"))"
+                  RowStyle="cursor: pointer;">
+            <ToolBarContent>
+                <MudText Typo="Typo.h6">Buchungen</MudText>
+                <MudSpacer />
+                <MudTextField @bind-Value="_search" Placeholder="Suchen" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              Immediate="true" Clearable="true" Class="mt-0" Style="max-width: 260px;" />
+            </ToolBarContent>
+            <HeaderContent>
+                <MudTh>Datum</MudTh>
+                <MudTh>Beschreibung</MudTh>
+                <MudTh>Kategorie / Gegenkonto</MudTh>
+                <MudTh Style="text-align: right">Betrag</MudTh>
+                <MudTh Style="text-align: right">Saldo</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Datum">@Date(context.Transaction.Date)</MudTd>
+                <MudTd DataLabel="Beschreibung">
+                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                        <MudText Typo="Typo.body2">@context.Transaction.Description</MudText>
+                        @if (context.Transaction.RecurringId != null)
+                        {
+                            <MudTooltip Text="Aus Dauerauftrag"><MudIcon Icon="@Icons.Material.Filled.EventRepeat" Size="Size.Small" Color="Color.Info" /></MudTooltip>
+                        }
+                    </MudStack>
+                </MudTd>
+                <MudTd DataLabel="Kategorie">
+                    @if (context.Transaction.Type == TransactionType.Umbuchung)
+                    {
+                        var other = context.Transaction.AccountId == account.Id ? context.Transaction.ToAccountId : context.Transaction.AccountId;
+                        <MudText Typo="Typo.body2">
+                            <MudIcon Icon="@Icons.Material.Filled.SwapHoriz" Size="Size.Small" Class="mr-1" Style="vertical-align: middle;" />
+                            @(context.Amount < 0 ? "an" : "von") @Finance.AccountName(other)
+                        </MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2">@Finance.CategoryName(context.Transaction.CategoryId)</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Betrag" Style="text-align: right">
+                    <MudText Typo="Typo.body2" Color="@(context.Amount >= 0 ? Color.Success : Color.Error)">@SignedMoney(context.Amount)</MudText>
+                </MudTd>
+                <MudTd DataLabel="Saldo" Style="text-align: right">@Money(context.Balance)</MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Typo="Typo.body2" Class="pa-4">Keine Buchungen auf diesem Konto.</MudText>
+            </NoRecordsContent>
+            <PagerContent>
+                <MudTablePager RowsPerPageString="Zeilen pro Seite:" InfoFormat="{first_item}-{last_item} von {all_items}" />
+            </PagerContent>
+        </MudTable>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private record Row(Transaction Transaction, decimal Amount, decimal Balance);
+
+    private Konto? account;
+    private List<Row> _rows = new();
+    private decimal _inflow, _outflow;
+    private string _search = "";
+    private List<ChartSeries> _series = new();
+    private string[] _labels = Array.Empty<string>();
+    private readonly ChartOptions _options = new() { YAxisFormat = "N0", MaxNumYAxisTicks = 6 };
+
+    protected override void OnParametersSet() => Compute();
+    protected override void OnDataChanged() => Compute();
+
+    private bool FilterRow(Row row) =>
+        string.IsNullOrWhiteSpace(_search) ||
+        row.Transaction.Description.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+        (row.Transaction.Notes?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false);
+
+    private void Compute()
+    {
+        account = Finance.GetAccount(Id);
+        if (account == null) return;
+
+        // Laufender Saldo: chronologisch aufsummieren, dann absteigend anzeigen.
+        var running = account.OpeningBalance;
+        var chronological = Finance.Transactions
+            .Where(t => t.AccountId == Id || t.ToAccountId == Id)
+            .OrderBy(t => t.Date).ThenBy(t => t.CreatedAt)
+            .Select(t =>
+            {
+                var amount = FinanceState.SignedAmountFor(t, Id);
+                running += amount;
+                return new Row(t, amount, running);
+            })
+            .ToList();
+        chronological.Reverse();
+        _rows = chronological;
+
+        var month = FinanceState.MonthStart(DateTime.Today);
+        var thisMonth = _rows.Where(r => r.Transaction.Date >= month).ToList();
+        _inflow = thisMonth.Where(r => r.Amount > 0).Sum(r => r.Amount);
+        _outflow = -thisMonth.Where(r => r.Amount < 0).Sum(r => r.Amount);
+
+        var months = Enumerable.Range(0, 12).Select(i => month.AddMonths(i - 11)).ToList();
+        _labels = months.Select((m, i) => i % 2 == 1 ? m.ToString("MMM", De) : "").ToArray();
+        _series = new()
+        {
+            new ChartSeries
+            {
+                Name = "Saldo",
+                Data = months.Select(m => (double)Finance.BalanceAt(Id, m == month ? DateTime.Today : m.AddMonths(1).AddDays(-1))).ToArray()
+            }
+        };
+    }
+}

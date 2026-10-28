@@ -22,11 +22,22 @@ jobs:
       with:
         dotnet-version: 9.0.x
 
+    # Vor dem Publish anpassen, damit die Hashes im Service-Worker-Manifest stimmen.
+    - name: Update base href
+      run: sed -i 's/<base href="\/" \/>/<base href="\/monexa\/" \/>/' wwwroot/index.html
+
+    # Optional: Repository-Variablen SUPABASE_URL und SUPABASE_ANON_KEY aktivieren den Cloud-Modus.
+    # Ohne Variablen läuft die veröffentlichte App im Demo-Modus (localStorage).
+    - name: Configure Supabase
+      if: ${{ vars.SUPABASE_URL != '' }}
+      env:
+        SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+        SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+      run: |
+        printf '{\n  "Supabase": {\n    "Url": "%s",\n    "AnonKey": "%s"\n  }\n}\n' "$SUPABASE_URL" "$SUPABASE_ANON_KEY" > wwwroot/appsettings.json
+
     - name: Publish
       run: dotnet publish -c Release -o release
-
-    - name: Update base href
-      run: sed -i 's/<base href="\/" \/>/<base href="\/monexa\/" \/>/' release/wwwroot/index.html
 
     - name: Copy index.html to 404.html
       run: cp release/wwwroot/index.html release/wwwroot/404.html

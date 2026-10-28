@@ -1,0 +1,27 @@
+@* Kennzahl-Kachel, wie sie auf Dashboard, Konten, Budgets & Co. verwendet wird. *@
+<MudPaper Elevation="0" Outlined="true" Class="pa-4" Style="height: 100%;">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start">
+        <MudStack Spacing="1">
+            <MudText Typo="Typo.caption" Color="Color.Primary" Style="text-transform: uppercase; letter-spacing: .04em;">@Title</MudText>
+            <MudText Typo="Typo.h5" Color="@ValueColor">@Value</MudText>
+            @if (!string.IsNullOrEmpty(Caption))
+            {
+                <MudText Typo="Typo.caption" Color="@CaptionColor">@Caption</MudText>
+            }
+        </MudStack>
+        @if (!string.IsNullOrEmpty(Icon))
+        {
+            <MudIcon Icon="@Icon" Color="@IconColor" Size="Size.Large" />
+        }
+    </MudStack>
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string Value { get; set; } = "";
+    [Parameter] public string? Caption { get; set; }
+    [Parameter] public string? Icon { get; set; }
+    [Parameter] public Color ValueColor { get; set; } = Color.Default;
+    [Parameter] public Color IconColor { get; set; } = Color.Primary;
+    [Parameter] public Color CaptionColor { get; set; } = Color.Default;
+}

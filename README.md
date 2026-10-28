@@ -22,9 +22,21 @@ Das System basiert auf einer strikten Mandantentrennung. Benutzer können:
 * Echtzeit-Synchronisation bei Änderungen durch Teammitglieder (powered by Supabase Realtime).
 
 ### 🏦 Intelligente Kontenverwaltung
-* Anlage beliebig vieler Unterkonten pro Projekt (z.B. Puffer, Steuern, Operating).
-* **Transaction Tracking:** Präzise Erfassung von Umsätzen mit Kategorisierung und Metadaten.
-* **Analytik:** Dynamische Visualisierung der Cashflow-Entwicklung und Budget-Verteilung.
+* Anlage beliebig vieler Unterkonten pro Projekt (z.B. Puffer, Steuern, Operating) mit Detailseite und Saldoverlauf.
+* **Transaction Tracking:** Einnahmen, Ausgaben und Umbuchungen mit Kategorien, Notizen, Filtern (Zeitraum, Konto, Kategorie, Typ) und Mehrfachauswahl.
+* **Automatische Salden:** Kontostände werden aus Anfangssaldo und Buchungen berechnet.
+* **Kategorie-Vorschläge:** Neue Buchungen erhalten anhand früherer Buchungen automatisch eine passende Kategorie.
+
+### 🔁 Daueraufträge, Budgets & Sparziele
+* **Daueraufträge & Abos:** wöchentlich bis jährlich; fällige Termine werden automatisch verbucht, Fixkostenübersicht pro Monat.
+* **Budgets:** pro Kategorie oder für alle Ausgaben, wöchentlich/monatlich/jährlich, mit Ampel, Hochrechnung und Monatsnavigation.
+* **Sparziele:** Zielbetrag, Zieldatum, Ein-/Auszahlungen und benötigte Monatsrate.
+
+### 📊 Analysen & Berichte
+* Dashboard mit Vermögen, Cashflow-Chart, Ausgaben nach Kategorie und anstehenden Buchungen.
+* Budget-Analyse mit kumuliertem Ausgabenverlauf, Insights und Monatsvergleich.
+* Monats- und Jahresberichte sowie Zeitraumvergleiche (druckbar).
+* **Export/Import:** CSV (Excel-kompatibel) und JSON-Komplettbackup pro Projekt.
 
 ---
 
@@ -36,7 +48,8 @@ Dieses Projekt nutzt modernste Cloud-Technologien für maximale Skalierbarkeit u
 | **Frontend** | **Blazor WebAssembly** | C# im Browser via WebAssembly für eine native User Experience. |
 | **Backend/DB** | **Supabase (PostgreSQL)** | Datenbank, Authentifizierung und Realtime-Engine. |
 | **Security** | **Row Level Security (RLS)** | Absicherung der Daten direkt auf Datenbankebene. |
-| **Styling** | **MudBlazor / Tailwind** | Modernes UI/UX Design mit reaktiven Komponenten. |
+| **Styling** | **MudBlazor** | Modernes UI/UX Design mit reaktiven Komponenten. |
+| **Offline/Demo** | **localStorage** | Voll funktionsfähiger Betrieb ohne Backend. |
 
 ---
 
@@ -46,14 +59,41 @@ Das Projekt befindet sich in aktiver Entwicklung. Geplante Meilensteine sind:
 
 - [x] **Phase 1:** Core-Architektur, Authentifizierung & Manuelle Buchungen.
 - [ ] **Phase 2:** Implementierung von **Open Banking APIs** (PSD2/FinTS), um echte Bankkonten direkt per C#-Backend anzubinden.
-- [ ] **Phase 3:** KI-gestützte Kategorisierung von Umsätzen basierend auf historischen Daten Mustern.
-- [ ] **Phase 4:** Export-Modul für Steuerberater (CSV, DATEV-Format).
+- [ ] **Phase 3:** KI-gestützte Kategorisierung von Umsätzen basierend auf historischen Daten Mustern. *(Erste Stufe: regelbasierte Vorschläge aus früheren Buchungen ✔)*
+- [ ] **Phase 4:** Export-Modul für Steuerberater (CSV ✔, DATEV-Format offen).
+
+Details zum aktuellen Ausbau: [docs/IMPLEMENTIERUNGSPLAN.md](docs/IMPLEMENTIERUNGSPLAN.md)
 
 ---
 
 ## ⚙️ Installation & Local Setup
 
-Die Möglichkeit das Projekt lokal zu hosten ist aktuell in Planung.
+Voraussetzung: [.NET 9 SDK](https://dotnet.microsoft.com/download).
+
+```bash
+dotnet run --launch-profile http
+```
+
+Die App läuft dann unter `http://localhost:5227`.
+
+### Demo-Modus (ohne Backend)
+Ist in `wwwroot/appsettings.json` kein Supabase-Projekt eingetragen, startet MonExA im **Demo-Modus**:
+Alle Daten liegen im `localStorage` des Browsers und werden beim ersten Start mit Beispieldaten befüllt.
+Unter *Einstellungen* lassen sich die Daten jederzeit zurücksetzen.
+
+### Cloud-Modus mit Supabase
+1. Projekt auf [supabase.com](https://supabase.com) anlegen.
+2. Inhalt von [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) im SQL-Editor ausführen
+   (Tabellen, Row Level Security, Rollen, Einladungen, Realtime).
+3. URL und **anon/publishable Key** (Settings → API) in `wwwroot/appsettings.json` eintragen:
+   ```json
+   { "Supabase": { "Url": "https://<projekt>.supabase.co", "AnonKey": "<anon-key>" } }
+   ```
+   Niemals den `service_role`/secret Key verwenden – der Schutz erfolgt über RLS.
+4. Unter *Authentication → URL Configuration* die App-URL als Redirect-URL eintragen (für Bestätigungsmails und Magic Links).
+
+Für das GitHub-Pages-Deployment können URL und Key alternativ als Repository-Variablen
+`SUPABASE_URL` und `SUPABASE_ANON_KEY` hinterlegt werden; der Workflow schreibt sie beim Build in die Konfiguration.
 
 ---
 

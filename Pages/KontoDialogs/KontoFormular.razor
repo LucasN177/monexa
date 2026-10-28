@@ -1,0 +1,303 @@
+@page "/konten/neu"
+@page "/konten/{Id:guid}/bearbeiten"
+@inherits FinancePage
+
+<PageTitle>@(IsEdit ? "Konto bearbeiten" : "Neues Konto erstellen") – MonExA</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4 mb-8">
+    @if (account == null)
+    {
+        <EmptyState Icon="@Icons.Material.Filled.SearchOff" Title="Konto nicht gefunden"
+                    Text="Das Konto existiert nicht (mehr) oder gehört zu einem anderen Projekt.">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="konten">Zur Kontenübersicht</MudButton>
+        </EmptyState>
+    }
+    else
+    {
+        <PageHeader Title="@(IsEdit ? "Konto bearbeiten" : "Neues Konto erstellen")" BackHref="@(IsEdit ? $"konten/{Id}" : "konten")">
+            <Actions>
+                @if (IsEdit)
+                {
+                    <MudChip T="string" Icon="@AccountTypeIcon(account.Type)" Color="@AccountTypeColor(account.Type)" Size="Size.Small">
+                        @AccountTypeText(account.Type)
+                    </MudChip>
+                }
+            </Actions>
+        </PageHeader>
+
+        <MudPaper Class="pa-6" Elevation="0" Outlined="true">
+            <MudForm @ref="form" @bind-IsValid="formValid" ReadOnly="@(!Finance.CanEdit)">
+                <MudGrid Spacing="3">
+                    <!-- Allgemeine Informationen -->
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.h6" Class="mb-2">Allgemeine Informationen</MudText>
+                        <MudDivider />
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="account.Name"
+                                      Label="Kontoname"
+                                      Required="true"
+                                      RequiredError="Kontoname ist erforderlich"
+                                      Variant="Variant.Outlined"
+                                      MaxLength="60"
+                                      Immediate="true"
+                                      HelperText="Geben Sie einen aussagekräftigen Namen ein" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudSelect @bind-Value="account.Type"
+                                   Label="Kontotyp"
+                                   Required="true"
+                                   Variant="Variant.Outlined"
+                                   AnchorOrigin="Origin.BottomCenter">
+                            @foreach (AccountType type in Enum.GetValues<AccountType>())
+                            {
+                                <MudSelectItem Value="@type">
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                        <MudIcon Icon="@AccountTypeIcon(type)" Size="Size.Small" />
+                                        <MudText>@AccountTypeText(type)</MudText>
+                                    </MudStack>
+                                </MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudStack Spacing="2">
+                            <MudSwitch T="bool" @bind-Value="account.IsActive"
+                                       Label="Konto ist aktiv"
+                                       Color="Color.Success"
+                                       Class="mt-2" />
+                            @if (!account.IsActive)
+                            {
+                                <MudAlert Severity="Severity.Warning" Dense="true" Variant="Variant.Text">
+                                    Inaktive Konten werden nicht in Statistiken berücksichtigt
+                                </MudAlert>
+                            }
+                        </MudStack>
+                    </MudItem>
+
+                    <!-- Bankinformationen -->
+                    <MudItem xs="12" Class="mt-4">
+                        <MudText Typo="Typo.h6" Class="mb-2">Bankinformationen</MudText>
+                        <MudDivider />
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="account.BankName"
+                                      Label="Bank"
+                                      Required="true"
+                                      RequiredError="Bank ist erforderlich"
+                                      Variant="Variant.Outlined"
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.AccountBalance" />
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="account.IBAN"
+                                      Label="IBAN"
+                                      Variant="Variant.Outlined"
+                                      Mask="@ibanMask"
+                                      Validation="@(new Func<string, string?>(ValidateIban))"
+                                      HelperText="Optional: Internationale Bankkontonummer"
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.CreditCard" />
+                    </MudItem>
+
+                    <!-- Finanzinformationen -->
+                    <MudItem xs="12" Class="mt-4">
+                        <MudText Typo="Typo.h6" Class="mb-2">Finanzinformationen</MudText>
+                        <MudDivider />
+                    </MudItem>
+
+                    <MudItem xs="12" md="8">
+                        <MudNumericField @bind-Value="balance"
+                                         Label="Aktueller Kontostand"
+                                         Format="N2"
+                                         Culture="@De"
+                                         Variant="Variant.Outlined"
+                                         Adornment="Adornment.Start"
+                                         AdornmentText="€"
+                                         HideSpinButtons="true"
+                                         HelperText="@(IsEdit ? "Wird automatisch durch Transaktionen fortgeschrieben. Eine Änderung passt den Anfangssaldo an." : "Kontostand zum heutigen Tag")" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="4">
+                        <MudSelect @bind-Value="account.Currency"
+                                   Label="Währung"
+                                   Required="true"
+                                   Variant="Variant.Outlined">
+                            <MudSelectItem Value="@("EUR")">EUR (€)</MudSelectItem>
+                            <MudSelectItem Value="@("USD")">USD ($)</MudSelectItem>
+                            <MudSelectItem Value="@("GBP")">GBP (£)</MudSelectItem>
+                            <MudSelectItem Value="@("CHF")">CHF (Fr.)</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+
+                    @if (IsEdit)
+                    {
+                        <MudItem xs="12">
+                            <MudPaper Class="pa-4" Outlined="true">
+                                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                    <MudText Typo="Typo.body1">Bisheriger Kontostand:</MudText>
+                                    <MudText Typo="Typo.h6" Color="@(originalBalance >= 0 ? Color.Success : Color.Error)">
+                                        @Money(originalBalance)
+                                    </MudText>
+                                </MudStack>
+                                @if (balance != originalBalance)
+                                {
+                                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                        <MudText Typo="Typo.body2">Korrektur:</MudText>
+                                        <MudText Typo="Typo.body2" Color="@(balance - originalBalance >= 0 ? Color.Success : Color.Error)">
+                                            @SignedMoney(balance - originalBalance)
+                                        </MudText>
+                                    </MudStack>
+                                }
+                            </MudPaper>
+                        </MudItem>
+                    }
+
+                    <!-- Zusätzliche Informationen -->
+                    <MudItem xs="12" Class="mt-4">
+                        <MudText Typo="Typo.h6" Class="mb-2">Zusätzliche Informationen</MudText>
+                        <MudDivider />
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="account.Description"
+                                      Label="Beschreibung"
+                                      Lines="3"
+                                      Variant="Variant.Outlined"
+                                      HelperText="Optional: Notizen oder zusätzliche Informationen zu diesem Konto" />
+                    </MudItem>
+
+                    @if (!IsEdit)
+                    {
+                        <MudItem xs="12">
+                            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                                <strong>Hinweis:</strong> Nach dem Erstellen können Sie Transaktionen für dieses Konto erfassen und die Entwicklung Ihres Kontostands verfolgen.
+                            </MudAlert>
+                        </MudItem>
+                    }
+                </MudGrid>
+            </MudForm>
+        </MudPaper>
+
+        @if (Finance.CanEdit)
+        {
+            <!-- Action Buttons - Fixed am unteren Rand für mobile -->
+            <MudPaper Class="pa-4 mt-4" Elevation="4" Style="position: sticky; bottom: 0; z-index: 10;">
+                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Default"
+                               StartIcon="@Icons.Material.Filled.Cancel"
+                               Href="@(IsEdit ? $"konten/{Id}" : "konten")">
+                        Abbrechen
+                    </MudButton>
+                    <MudStack Row="true" Spacing="2">
+                        @if (IsEdit)
+                        {
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Error"
+                                       StartIcon="@Icons.Material.Filled.Delete"
+                                       OnClick="DeleteAccount">
+                                Löschen
+                            </MudButton>
+                        }
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Save"
+                                   OnClick="SaveAccount"
+                                   Disabled="@saving">
+                            @(IsEdit ? "Speichern" : "Konto erstellen")
+                        </MudButton>
+                    </MudStack>
+                </MudStack>
+            </MudPaper>
+        }
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private bool IsEdit => Id.HasValue;
+    private Konto? account;
+    private decimal balance;
+    private decimal originalBalance;
+    private MudForm? form;
+    private bool formValid;
+    private bool saving;
+
+    // IBAN Maske für bessere Eingabe
+    private readonly IMask ibanMask = new PatternMask("AA## #### #### #### #### ####")
+    {
+        MaskChars = new[] { new MaskChar('A', @"[A-Za-z]"), new MaskChar('#', @"[0-9A-Za-z]") },
+        CleanDelimiters = false,
+        Transformation = AllUpperCase
+    };
+
+    private static char AllUpperCase(char c) => char.ToUpperInvariant(c);
+
+    protected override void OnParametersSet()
+    {
+        if (IsEdit)
+        {
+            account = Finance.GetAccount(Id)?.Clone();
+            originalBalance = balance = account?.Balance ?? 0;
+        }
+        else
+        {
+            account = new Konto { IsActive = true, Currency = "EUR" };
+            balance = 0;
+        }
+    }
+
+    private static string? ValidateIban(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var iban = value.Replace(" ", "");
+        if (iban.Length < 15) return "IBAN ist zu kurz";
+        // Prüfziffer nach ISO 13616 (Modulo 97)
+        var rearranged = iban[4..] + iban[..4];
+        var remainder = 0;
+        foreach (var c in rearranged)
+        {
+            var digits = char.IsLetter(c) ? (c - 'A' + 10).ToString() : c.ToString();
+            foreach (var d in digits) remainder = (remainder * 10 + (d - '0')) % 97;
+        }
+        return remainder == 1 ? null : "Ungültige IBAN-Prüfziffer";
+    }
+
+    private async Task SaveAccount()
+    {
+        if (account == null || form == null) return;
+        await form.Validate();
+        if (!form.IsValid) return;
+
+        saving = true;
+        account.Name = account.Name.Trim();
+        var ok = await Finance.SaveAccountAsync(account, desiredBalance: IsEdit && balance == originalBalance ? null : balance);
+        saving = false;
+        if (!ok) return;
+
+        Snackbar.Add(IsEdit ? $"Konto „{account.Name}“ wurde aktualisiert." : $"Konto „{account.Name}“ wurde erstellt.", Severity.Success);
+        Navigation.NavigateTo($"konten/{account.Id}");
+    }
+
+    private async Task DeleteAccount()
+    {
+        if (account == null) return;
+        var count = Finance.Transactions.Count(t => t.AccountId == account.Id || t.ToAccountId == account.Id);
+        var message = $"Möchtest du das Konto <strong>{account.Name}</strong> wirklich löschen?" +
+                      (count > 0 ? $"<br/><br/>Dabei werden auch <strong>{count} Transaktionen</strong> gelöscht." : "");
+        if (!await ConfirmAsync("Konto löschen", message)) return;
+
+        if (await Finance.DeleteAccountAsync(account.Id))
+        {
+            Snackbar.Add($"Konto „{account.Name}“ wurde gelöscht.", Severity.Success);
+            Navigation.NavigateTo("konten");
+        }
+    }
+}

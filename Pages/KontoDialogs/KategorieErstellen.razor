@@ -1,411 +1,350 @@
 @page "/categories/create"
-@page "/categories/edit/{Id:int}"
-@using System.ComponentModel.DataAnnotations
-@inject NavigationManager NavigationManager
-@inject ISnackbar Snackbar
+@page "/categories/edit/{Id:guid}"
+@inherits FinancePage
 
-<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
-    <MudBreadcrumbs Items="_breadcrumbItems" Class="mb-4"></MudBreadcrumbs>
+<PageTitle>@(IsEditMode ? "Kategorie bearbeiten" : "Neue Kategorie") – MonExA</PageTitle>
 
-    <MudPaper Elevation="2" Class="pa-6">
-        <MudText Typo="Typo.h5" Class="mb-6">
-            <MudIcon Icon="@(IsEditMode ? Icons.Material.Filled.Edit : Icons.Material.Filled.Add)" Class="mr-2" />
-            @(IsEditMode ? "Kategorie bearbeiten" : "Neue Kategorie erstellen")
-        </MudText>
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4 mb-8">
+    <MudBreadcrumbs Items="_breadcrumbItems" Class="mb-4 px-0"></MudBreadcrumbs>
 
-        <MudForm @ref="form" @bind-IsValid="@isFormValid">
-            <MudGrid>
-                <!-- Name -->
-                <MudItem xs="12">
-                    <MudTextField @bind-Value="model.Name"
-                                  Label="Kategoriename"
-                                  Variant="Variant.Outlined"
-                                  Required="true"
-                                  RequiredError="Name ist erforderlich"
-                                  MaxLength="50"
-                                  Counter="50"
-                                  Immediate="true"
-                                  HelperText="Eindeutiger Name für die Kategorie">
-                    </MudTextField>
-                </MudItem>
+    @if (model == null)
+    {
+        <EmptyState Title="Kategorie nicht gefunden">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="categories">Zur Übersicht</MudButton>
+        </EmptyState>
+    }
+    else
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="pa-6">
+            <MudText Typo="Typo.h5" Class="mb-6">
+                <MudIcon Icon="@(IsEditMode ? Icons.Material.Filled.Edit : Icons.Material.Filled.Add)" Class="mr-2" />
+                @(IsEditMode ? "Kategorie bearbeiten" : "Neue Kategorie erstellen")
+            </MudText>
 
-                <!-- Typ -->
-                <MudItem xs="12" sm="6">
-                    <MudSelect @bind-Value="model.Type"
-                               Label="Typ"
-                               Variant="Variant.Outlined"
-                               Required="true"
-                               HelperText="Einnahme oder Ausgabe">
-                        <MudSelectItem Value="@("Einnahme")">
-                            <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Color="Color.Success" Size="Size.Small" Class="mr-2" />
-                            Einnahme
-                        </MudSelectItem>
-                        <MudSelectItem Value="@("Ausgabe")">
-                            <MudIcon Icon="@Icons.Material.Filled.TrendingDown" Color="Color.Error" Size="Size.Small" Class="mr-2" />
-                            Ausgabe
-                        </MudSelectItem>
-                    </MudSelect>
-                </MudItem>
-
-                <!-- Monatliches Budget -->
-                <MudItem xs="12" sm="6">
-                    <MudNumericField @bind-Value="model.MonthlyBudget"
-                                     Label="Monatliches Budget"
-                                     Variant="Variant.Outlined"
-                                     Format="N2"
-                                     Adornment="Adornment.Start"
-                                     AdornmentText="€"
-                                     Min="0"
-                                     Max="999999"
-                                     HelperText="Optional: Budget festlegen">
-                    </MudNumericField>
-                </MudItem>
-
-                <!-- Icon Auswahl -->
-                <MudItem xs="12" sm="6">
-                    <MudSelect @bind-Value="model.Icon"
-                               Label="Icon"
-                               Variant="Variant.Outlined"
-                               Required="true"
-                               HelperText="Wähle ein passendes Icon">
-                        @foreach (var icon in availableIcons)
-                        {
-                            <MudSelectItem Value="@icon.Value">
-                                <div class="d-flex align-center">
-                                    <MudIcon Icon="@icon.Value" Class="mr-2" />
-                                    <span>@icon.Key</span>
-                                </div>
-                            </MudSelectItem>
-                        }
-                    </MudSelect>
-                </MudItem>
-
-                <!-- Farbe Auswahl -->
-                <MudItem xs="12" sm="6">
-                    <MudSelect @bind-Value="model.Color"
-                               Label="Farbe"
-                               Variant="Variant.Outlined"
-                               Required="true"
-                               HelperText="Wähle eine Farbe">
-                        @foreach (var color in availableColors)
-                        {
-                            <MudSelectItem Value="@color.Key">
-                                <div class="d-flex align-center">
-                                    <MudIcon Icon="@Icons.Material.Filled.Circle" Color="@color.Value" Class="mr-2" />
-                                    <span>@color.Key</span>
-                                </div>
-                            </MudSelectItem>
-                        }
-                    </MudSelect>
-                </MudItem>
-
-                <!-- Vorschau -->
-                <MudItem xs="12">
-                    <MudPaper Elevation="0" Class="pa-4" Style="background-color: var(--mud-palette-background-grey);">
-                        <MudText Typo="Typo.subtitle2" Class="mb-3">Vorschau</MudText>
-                        <MudChip T="string" Icon="@model.Icon" 
-                                 Color="@GetColorValue(model.Color)" 
-                                 Size="Size.Large"
-                                 Label="true">
-                            @(string.IsNullOrWhiteSpace(model.Name) ? "Kategoriename" : model.Name)
-                        </MudChip>
-                        <MudChip T="string" Color="@(model.Type == "Einnahme" ? Color.Success : Color.Error)" 
-                                 Size="Size.Small" 
-                                 Class="ml-2"
-                                 Icon="@(model.Type == "Einnahme" ? Icons.Material.Filled.TrendingUp : Icons.Material.Filled.TrendingDown)">
-                            @model.Type
-                        </MudChip>
-                    </MudPaper>
-                </MudItem>
-
-                <!-- Beschreibung -->
-                <MudItem xs="12">
-                    <MudTextField @bind-Value="model.Description"
-                                  Label="Beschreibung"
-                                  Variant="Variant.Outlined"
-                                  Lines="4"
-                                  MaxLength="200"
-                                  Counter="200"
-                                  HelperText="Optionale Beschreibung der Kategorie">
-                    </MudTextField>
-                </MudItem>
-
-                <!-- Sortierung -->
-                <MudItem xs="12" sm="6">
-                    <MudNumericField @bind-Value="model.SortOrder"
-                                     Label="Sortierung"
-                                     Variant="Variant.Outlined"
-                                     Min="0"
-                                     HelperText="Reihenfolge der Anzeige (0 = zuerst)">
-                    </MudNumericField>
-                </MudItem>
-
-                <!-- Aktiv Status -->
-                <MudItem xs="12" sm="6" Class="d-flex align-center">
-                    <MudSwitch @bind-Value="model.IsActive" 
-                               Color="Color.Primary" 
-                               Label="Kategorie aktiv"
-                               Class="mt-4" />
-                </MudItem>
-
-                @if (IsEditMode)
-                {
-                    <!-- Statistiken nur im Bearbeitungsmodus -->
+            <MudForm @ref="form" @bind-IsValid="@isFormValid" ReadOnly="@(!Finance.CanEdit)">
+                <MudGrid>
+                    <!-- Name -->
                     <MudItem xs="12">
-                        <MudDivider Class="my-4" />
-                        <MudText Typo="Typo.subtitle2" Class="mb-3">Statistiken</MudText>
-                        <MudGrid>
-                            <MudItem xs="6" sm="3">
-                                <MudPaper Elevation="0" Class="pa-3 text-center" Style="background-color: var(--mud-palette-primary-lighten);">
-                                    <MudText Typo="Typo.h6">@model.TransactionCount</MudText>
-                                    <MudText Typo="Typo.caption">Transaktionen</MudText>
-                                </MudPaper>
-                            </MudItem>
-                            <MudItem xs="6" sm="3">
-                                <MudPaper Elevation="0" Class="pa-3 text-center" Style="background-color: var(--mud-palette-success-lighten);">
-                                    <MudText Typo="Typo.h6">@model.TotalAmount.ToString("C2")</MudText>
-                                    <MudText Typo="Typo.caption">Gesamtsumme</MudText>
-                                </MudPaper>
-                            </MudItem>
-                            <MudItem xs="6" sm="3">
-                                <MudPaper Elevation="0" Class="pa-3 text-center" Style="background-color: var(--mud-palette-info-lighten);">
-                                    <MudText Typo="Typo.h6">@model.AverageAmount.ToString("C2")</MudText>
-                                    <MudText Typo="Typo.caption">Durchschnitt</MudText>
-                                </MudPaper>
-                            </MudItem>
-                            <MudItem xs="6" sm="3">
-                                <MudPaper Elevation="0" Class="pa-3 text-center" Style="background-color: var(--mud-palette-warning-lighten);">
-                                    <MudText Typo="Typo.h6">@model.LastUsed?.ToString("dd.MM.yyyy") ?? "-"</MudText>
-                                    <MudText Typo="Typo.caption">Zuletzt verwendet</MudText>
-                                </MudPaper>
-                            </MudItem>
-                        </MudGrid>
+                        <MudTextField @bind-Value="model.Name"
+                                      Label="Kategoriename"
+                                      Variant="Variant.Outlined"
+                                      Required="true"
+                                      RequiredError="Name ist erforderlich"
+                                      Validation="@(new Func<string, string?>(ValidateName))"
+                                      MaxLength="50"
+                                      Counter="50"
+                                      Immediate="true"
+                                      HelperText="Eindeutiger Name für die Kategorie" />
                     </MudItem>
-                }
 
-                <!-- Buttons -->
-                <MudItem xs="12" Class="mt-4">
-                    <MudStack Row="true" Spacing="2" Justify="Justify.SpaceBetween">
-                        <MudButton Variant="Variant.Outlined"
-                                   StartIcon="@Icons.Material.Filled.ArrowBack"
-                                   OnClick="Cancel">
-                            Abbrechen
-                        </MudButton>
-                        <MudStack Row="true" Spacing="2">
-                            @if (IsEditMode)
+                    <!-- Typ -->
+                    <MudItem xs="12" sm="6">
+                        <MudSelect @bind-Value="model.Type"
+                                   Label="Typ"
+                                   Variant="Variant.Outlined"
+                                   Required="true"
+                                   HelperText="Einnahme oder Ausgabe">
+                            <MudSelectItem Value="@CategoryType.Einnahme">
+                                <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Color="Color.Success" Size="Size.Small" Class="mr-2" />
+                                Einnahme
+                            </MudSelectItem>
+                            <MudSelectItem Value="@CategoryType.Ausgabe">
+                                <MudIcon Icon="@Icons.Material.Filled.TrendingDown" Color="Color.Error" Size="Size.Small" Class="mr-2" />
+                                Ausgabe
+                            </MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+
+                    <!-- Monatliches Budget -->
+                    <MudItem xs="12" sm="6">
+                        <MudNumericField @bind-Value="monthlyBudget"
+                                         Label="Monatliches Budget"
+                                         Variant="Variant.Outlined"
+                                         Format="N2"
+                                         Culture="@De"
+                                         HideSpinButtons="true"
+                                         Adornment="Adornment.Start"
+                                         AdornmentText="€"
+                                         Min="0"
+                                         Max="999999"
+                                         Disabled="@(model.Type == CategoryType.Einnahme || (existingBudget != null && existingBudget.Period != BudgetPeriod.Monatlich))"
+                                         HelperText="@BudgetHelperText" />
+                    </MudItem>
+
+                    <!-- Icon Auswahl -->
+                    <MudItem xs="12" sm="6">
+                        <MudSelect @bind-Value="model.Icon"
+                                   Label="Icon"
+                                   Variant="Variant.Outlined"
+                                   Required="true"
+                                   HelperText="Wähle ein passendes Icon">
+                            @foreach (var icon in CategoryIcons)
                             {
-                                <MudButton Variant="Variant.Outlined"
-                                           Color="Color.Error"
-                                           StartIcon="@Icons.Material.Filled.Delete"
-                                           OnClick="DeleteCategory">
-                                    Löschen
-                                </MudButton>
+                                <MudSelectItem Value="@icon.Key">
+                                    <div class="d-flex align-center">
+                                        <MudIcon Icon="@icon.Value" Class="mr-2" />
+                                        <span>@icon.Key</span>
+                                    </div>
+                                </MudSelectItem>
                             }
-                            <MudButton Variant="Variant.Filled"
-                                       Color="Color.Primary"
-                                       StartIcon="@Icons.Material.Filled.Save"
-                                       OnClick="SaveCategory"
-                                       Disabled="@(!isFormValid || isSaving)">
-                                @if (isSaving)
-                                {
-                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" />
-                                    <span class="ml-2">Speichern...</span>
-                                }
-                                else
-                                {
-                                    <span>@(IsEditMode ? "Änderungen speichern" : "Kategorie erstellen")</span>
-                                }
+                        </MudSelect>
+                    </MudItem>
+
+                    <!-- Farbe Auswahl -->
+                    <MudItem xs="12" sm="6">
+                        <MudSelect @bind-Value="model.Color"
+                                   Label="Farbe"
+                                   Variant="Variant.Outlined"
+                                   Required="true"
+                                   HelperText="Wähle eine Farbe">
+                            @foreach (var (key, label, color) in ColorOptions)
+                            {
+                                <MudSelectItem Value="@key">
+                                    <div class="d-flex align-center">
+                                        <MudIcon Icon="@Icons.Material.Filled.Circle" Color="@color" Class="mr-2" />
+                                        <span>@label</span>
+                                    </div>
+                                </MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+
+                    <!-- Vorschau -->
+                    <MudItem xs="12">
+                        <MudPaper Elevation="0" Class="pa-4" Style="background-color: var(--mud-palette-background-gray);">
+                            <MudText Typo="Typo.subtitle2" Class="mb-3">Vorschau</MudText>
+                            <MudChip T="string" Icon="@Icon(model.Icon)"
+                                     Color="@ParseColor(model.Color)"
+                                     Size="Size.Large"
+                                     Label="true">
+                                @(string.IsNullOrWhiteSpace(model.Name) ? "Kategoriename" : model.Name)
+                            </MudChip>
+                            <MudChip T="string" Color="@CategoryTypeColor(model.Type)"
+                                     Size="Size.Small"
+                                     Class="ml-2"
+                                     Icon="@(model.Type == CategoryType.Einnahme ? Icons.Material.Filled.TrendingUp : Icons.Material.Filled.TrendingDown)">
+                                @CategoryTypeText(model.Type)
+                            </MudChip>
+                        </MudPaper>
+                    </MudItem>
+
+                    <!-- Beschreibung -->
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="model.Description"
+                                      Label="Beschreibung"
+                                      Variant="Variant.Outlined"
+                                      Lines="3"
+                                      MaxLength="200"
+                                      Counter="200"
+                                      HelperText="Optionale Beschreibung der Kategorie" />
+                    </MudItem>
+
+                    <!-- Sortierung -->
+                    <MudItem xs="12" sm="6">
+                        <MudNumericField @bind-Value="model.SortOrder"
+                                         Label="Sortierung"
+                                         Variant="Variant.Outlined"
+                                         Min="0"
+                                         HelperText="Reihenfolge der Anzeige (0 = zuerst)" />
+                    </MudItem>
+
+                    <!-- Aktiv Status -->
+                    <MudItem xs="12" sm="6" Class="d-flex align-center">
+                        <MudSwitch T="bool" @bind-Value="model.IsActive"
+                                   Color="Color.Primary"
+                                   Label="Kategorie aktiv (in Auswahllisten sichtbar)"
+                                   Class="mt-4" />
+                    </MudItem>
+
+                    @if (IsEditMode)
+                    {
+                        <!-- Statistiken nur im Bearbeitungsmodus -->
+                        <MudItem xs="12">
+                            <MudDivider Class="my-4" />
+                            <MudText Typo="Typo.subtitle2" Class="mb-3">Statistiken</MudText>
+                            <MudGrid>
+                                <MudItem xs="6" sm="3">
+                                    <MudPaper Elevation="0" Outlined="true" Class="pa-3" Style="text-align: center;">
+                                        <MudText Typo="Typo.h6">@_count</MudText>
+                                        <MudText Typo="Typo.caption">Transaktionen</MudText>
+                                    </MudPaper>
+                                </MudItem>
+                                <MudItem xs="6" sm="3">
+                                    <MudPaper Elevation="0" Outlined="true" Class="pa-3" Style="text-align: center;">
+                                        <MudText Typo="Typo.h6">@Money(_total)</MudText>
+                                        <MudText Typo="Typo.caption">Gesamtsumme</MudText>
+                                    </MudPaper>
+                                </MudItem>
+                                <MudItem xs="6" sm="3">
+                                    <MudPaper Elevation="0" Outlined="true" Class="pa-3" Style="text-align: center;">
+                                        <MudText Typo="Typo.h6">@Money(_average)</MudText>
+                                        <MudText Typo="Typo.caption">Durchschnitt</MudText>
+                                    </MudPaper>
+                                </MudItem>
+                                <MudItem xs="6" sm="3">
+                                    <MudPaper Elevation="0" Outlined="true" Class="pa-3" Style="text-align: center;">
+                                        <MudText Typo="Typo.h6">@(_lastUsed.HasValue ? Date(_lastUsed.Value) : "-")</MudText>
+                                        <MudText Typo="Typo.caption">Zuletzt verwendet</MudText>
+                                    </MudPaper>
+                                </MudItem>
+                            </MudGrid>
+                        </MudItem>
+                    }
+
+                    <!-- Buttons -->
+                    <MudItem xs="12" Class="mt-4">
+                        <MudStack Row="true" Spacing="2" Justify="Justify.SpaceBetween">
+                            <MudButton Variant="Variant.Outlined"
+                                       StartIcon="@Icons.Material.Filled.ArrowBack"
+                                       OnClick="Cancel">
+                                @(Finance.CanEdit ? "Abbrechen" : "Zurück")
                             </MudButton>
+                            @if (Finance.CanEdit)
+                            {
+                                <MudStack Row="true" Spacing="2">
+                                    @if (IsEditMode)
+                                    {
+                                        <MudButton Variant="Variant.Outlined"
+                                                   Color="Color.Error"
+                                                   StartIcon="@Icons.Material.Filled.Delete"
+                                                   OnClick="DeleteCategory">
+                                            Löschen
+                                        </MudButton>
+                                    }
+                                    <MudButton Variant="Variant.Filled"
+                                               Color="Color.Primary"
+                                               StartIcon="@Icons.Material.Filled.Save"
+                                               OnClick="SaveCategory"
+                                               Disabled="@isSaving">
+                                        @if (isSaving)
+                                        {
+                                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                                            <span class="ml-2">Speichern...</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@(IsEditMode ? "Änderungen speichern" : "Kategorie erstellen")</span>
+                                        }
+                                    </MudButton>
+                                </MudStack>
+                            }
                         </MudStack>
-                    </MudStack>
-                </MudItem>
-            </MudGrid>
-        </MudForm>
-    </MudPaper>
+                    </MudItem>
+                </MudGrid>
+            </MudForm>
+        </MudPaper>
+    }
 </MudContainer>
 
 @code {
-    [Parameter]
-    public int? Id { get; set; }
+    [Parameter] public Guid? Id { get; set; }
 
-    private MudForm form;
+    private MudForm? form;
     private bool isFormValid;
     private bool isSaving;
-    private CategoryFormModel model = new();
+    private Category? model;
+    private Budget? existingBudget;
+    private decimal? monthlyBudget;
     private List<BreadcrumbItem> _breadcrumbItems = new();
+
+    private int _count;
+    private decimal _total, _average;
+    private DateTime? _lastUsed;
 
     private bool IsEditMode => Id.HasValue;
 
-    private Dictionary<string, string> availableIcons = new()
-    {
-        { "Shopping", Icons.Material.Filled.ShoppingCart },
-        { "Essen & Trinken", Icons.Material.Filled.Restaurant },
-        { "Transport", Icons.Material.Filled.DirectionsCar },
-        { "Wohnen", Icons.Material.Filled.Home },
-        { "Unterhaltung", Icons.Material.Filled.Movie },
-        { "Gesundheit", Icons.Material.Filled.LocalHospital },
-        { "Bildung", Icons.Material.Filled.School },
-        { "Gehalt", Icons.Material.Filled.AttachMoney },
-        { "Geschenk", Icons.Material.Filled.CardGiftcard },
-        { "Reisen", Icons.Material.Filled.Flight },
-        { "Sport", Icons.Material.Filled.FitnessCenter },
-        { "Haustiere", Icons.Material.Filled.Pets },
-        { "Kleidung", Icons.Material.Filled.Checkroom },
-        { "Elektronik", Icons.Material.Filled.Devices },
-        { "Versicherung", Icons.Material.Filled.Security },
-        { "Telefon", Icons.Material.Filled.Phone },
-        { "Internet", Icons.Material.Filled.Wifi },
-        { "Streaming", Icons.Material.Filled.Subscriptions },
-        { "Investition", Icons.Material.Filled.TrendingUp },
-        { "Sparen", Icons.Material.Filled.Savings },
-        { "Sonstiges", Icons.Material.Filled.MoreHoriz }
-    };
+    private string BudgetHelperText =>
+        model?.Type == CategoryType.Einnahme ? "Nur für Ausgabekategorien"
+        : existingBudget != null && existingBudget.Period != BudgetPeriod.Monatlich ? $"{PeriodText(existingBudget.Period)}es Budget – unter Budgets bearbeiten"
+        : "Optional: legt ein Budget an bzw. aktualisiert es";
 
-    private Dictionary<string, Color> availableColors = new()
-    {
-        { "Primary", Color.Primary },
-        { "Secondary", Color.Secondary },
-        { "Success", Color.Success },
-        { "Info", Color.Info },
-        { "Warning", Color.Warning },
-        { "Error", Color.Error },
-        { "Dark", Color.Dark },
-        { "Tertiary", Color.Tertiary }
-    };
-
-    protected override async Task OnInitializedAsync()
-    {
-        SetupBreadcrumbs();
-
-        if (IsEditMode)
-        {
-            await LoadCategory();
-        }
-        else
-        {
-            // Standard-Werte für neue Kategorie
-            model.Icon = Icons.Material.Filled.Category;
-            model.Color = "Primary";
-            model.Type = "Ausgabe";
-            model.IsActive = true;
-            model.SortOrder = 0;
-        }
-    }
-
-    private void SetupBreadcrumbs()
+    protected override void OnParametersSet()
     {
         _breadcrumbItems = new List<BreadcrumbItem>
         {
-            new BreadcrumbItem("Start", href: "/"),
-            new BreadcrumbItem("Kategorien", href: "/categories"),
-            new BreadcrumbItem(IsEditMode ? "Bearbeiten" : "Erstellen", href: null, disabled: true)
+            new("Start", href: ""),
+            new("Kategorien", href: "categories"),
+            new(IsEditMode ? "Bearbeiten" : "Erstellen", href: null, disabled: true)
         };
-    }
-
-    private async Task LoadCategory()
-    {
-        // Simuliere API-Aufruf
-        await Task.Delay(300);
-
-        // Demo-Daten laden
-        model = new CategoryFormModel
-        {
-            Id = Id.Value,
-            Name = "Lebensmittel",
-            Description = "Einkäufe im Supermarkt und auf dem Markt",
-            Type = "Ausgabe",
-            Icon = Icons.Material.Filled.ShoppingCart,
-            Color = "Primary",
-            MonthlyBudget = 400,
-            IsActive = true,
-            SortOrder = 1,
-            TransactionCount = 45,
-            TotalAmount = 1850.50m,
-            AverageAmount = 41.12m,
-            LastUsed = DateTime.Now.AddDays(-2)
-        };
-    }
-
-    private async Task SaveCategory()
-    {
-        await form.Validate();
-        if (!isFormValid) return;
-
-        isSaving = true;
-        await Task.Delay(1000); // Simuliere API-Aufruf
 
         if (IsEditMode)
         {
-            Snackbar.Add($"Kategorie '{model.Name}' wurde erfolgreich aktualisiert.", Severity.Success);
+            model = Finance.GetCategory(Id)?.Clone();
+            if (model == null) return;
+            existingBudget = Finance.Budgets.FirstOrDefault(b => b.CategoryId == model.Id);
+            monthlyBudget = existingBudget?.Limit;
+
+            var transactions = Finance.Transactions.Where(t => t.CategoryId == model.Id).ToList();
+            _count = transactions.Count;
+            _total = transactions.Sum(t => t.Amount);
+            _average = _count > 0 ? Math.Round(_total / _count, 2) : 0;
+            _lastUsed = transactions.Count > 0 ? transactions.Max(t => t.Date) : null;
         }
         else
         {
-            Snackbar.Add($"Kategorie '{model.Name}' wurde erfolgreich erstellt.", Severity.Success);
+            model = new Category
+            {
+                Icon = "Sonstiges",
+                Color = "Primary",
+                Type = CategoryType.Ausgabe,
+                SortOrder = Finance.Categories.Count == 0 ? 0 : Finance.Categories.Max(c => c.SortOrder) + 1
+            };
         }
+    }
 
+    private string? ValidateName(string name) =>
+        Finance.Categories.Any(c => c.Id != model?.Id && string.Equals(c.Name, name?.Trim(), StringComparison.OrdinalIgnoreCase))
+            ? "Eine Kategorie mit diesem Namen existiert bereits"
+            : null;
+
+    private async Task SaveCategory()
+    {
+        if (model == null || form == null) return;
+        await form.Validate();
+        if (!form.IsValid) return;
+
+        isSaving = true;
+        model.Name = model.Name.Trim();
+        var ok = await Finance.SaveCategoryAsync(model);
+
+        if (ok && model.Type == CategoryType.Ausgabe && (existingBudget == null || existingBudget.Period == BudgetPeriod.Monatlich))
+        {
+            if (monthlyBudget is > 0)
+            {
+                var budget = existingBudget?.Clone() ?? new Budget { CategoryId = model.Id, Period = BudgetPeriod.Monatlich };
+                budget.Name = model.Name;
+                budget.Limit = monthlyBudget.Value;
+                budget.Icon = model.Icon;
+                budget.Color = model.Color;
+                ok = await Finance.SaveBudgetAsync(budget);
+            }
+            else if (existingBudget != null)
+            {
+                ok = await Finance.DeleteBudgetAsync(existingBudget.Id);
+            }
+        }
         isSaving = false;
-        NavigationManager.NavigateTo("/categories");
+        if (!ok) return;
+
+        Snackbar.Add(IsEditMode
+            ? $"Kategorie '{model.Name}' wurde erfolgreich aktualisiert."
+            : $"Kategorie '{model.Name}' wurde erfolgreich erstellt.", Severity.Success);
+        Navigation.NavigateTo("categories");
     }
 
     private async Task DeleteCategory()
     {
-        bool? result = await DialogService.ShowMessageBox(
-            "Kategorie löschen",
-            $"Möchten Sie die Kategorie '{model.Name}' wirklich löschen?",
-            yesText: "Löschen", cancelText: "Abbrechen");
+        if (model == null) return;
+        var message = $"Möchtest du die Kategorie <strong>{model.Name}</strong> wirklich löschen?" +
+                      (_count > 0 ? $"<br/><br/>{_count} Transaktionen verlieren dabei ihre Kategorie." : "");
+        if (!await ConfirmAsync("Kategorie löschen", message)) return;
 
-        if (result == true)
+        if (await Finance.DeleteCategoryAsync(model.Id))
         {
-            await Task.Delay(500);
             Snackbar.Add($"Kategorie '{model.Name}' wurde gelöscht.", Severity.Info);
-            NavigationManager.NavigateTo("/categories");
+            Navigation.NavigateTo("categories");
         }
     }
 
-    private void Cancel()
-    {
-        NavigationManager.NavigateTo("/categories");
-    }
-
-    private Color GetColorValue(string colorName)
-    {
-        return availableColors.TryGetValue(colorName, out var color) ? color : Color.Primary;
-    }
-
-    [Inject] private IDialogService DialogService { get; set; }
-
-    public class CategoryFormModel
-    {
-        public int Id { get; set; }
-
-        [Required(ErrorMessage = "Name ist erforderlich")]
-        [StringLength(50, ErrorMessage = "Name darf maximal 50 Zeichen lang sein")]
-        public string Name { get; set; } = "";
-
-        [StringLength(200, ErrorMessage = "Beschreibung darf maximal 200 Zeichen lang sein")]
-        public string? Description { get; set; }
-
-        [Required(ErrorMessage = "Typ ist erforderlich")]
-        public string Type { get; set; } = "Ausgabe";
-
-        [Required(ErrorMessage = "Icon ist erforderlich")]
-        public string Icon { get; set; } = Icons.Material.Filled.Category;
-
-        [Required(ErrorMessage = "Farbe ist erforderlich")]
-        public string Color { get; set; } = "Primary";
-
-        [Range(0, 999999, ErrorMessage = "Budget muss zwischen 0 und 999.999 liegen")]
-        public decimal? MonthlyBudget { get; set; }
-
-        public bool IsActive { get; set; } = true;
-
-        [Range(0, int.MaxValue, ErrorMessage = "Sortierung muss positiv sein")]
-        public int SortOrder { get; set; } = 0;
-
-        // Statistiken (nur für Bearbeitungsmodus)
-        public int TransactionCount { get; set; }
-        public decimal TotalAmount { get; set; }
-        public decimal AverageAmount { get; set; }
-        public DateTime? LastUsed { get; set; }
-    }
+    private void Cancel() => Navigation.NavigateTo("categories");
 }

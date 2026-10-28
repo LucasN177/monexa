@@ -1,0 +1,278 @@
+@page "/dauerauftraege"
+@inherits FinancePage
+
+<PageTitle>Daueraufträge – MonExA</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-8">
+    <PageHeader Title="Daueraufträge & Abos" Icon="@Icons.Material.Filled.EventRepeat"
+                Subtitle="Wiederkehrende Buchungen werden zum Fälligkeitstermin automatisch erfasst">
+        <Actions>
+            @if (Finance.CanEdit)
+            {
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PlaylistAddCheck" OnClick="BookDue"
+                           Disabled="@(!DueCount.Any())">
+                    Fällige buchen (@DueCount.Count())
+                </MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreate">
+                    Neuer Dauerauftrag
+                </MudButton>
+            }
+        </Actions>
+    </PageHeader>
+
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="6" md="3">
+            <StatCard Title="Fixkosten / Monat" Value="@Money(MonthlyExpenses)" ValueColor="Color.Error" Icon="@Icons.Material.Filled.TrendingDown" IconColor="Color.Error"
+                      Caption="@($"{Active.Count(r => r.Type == TransactionType.Ausgabe)} aktive Ausgaben")" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <StatCard Title="Fixe Einnahmen / Monat" Value="@Money(MonthlyIncome)" ValueColor="Color.Success" Icon="@Icons.Material.Filled.TrendingUp" IconColor="Color.Success" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <StatCard Title="Sparraten / Monat" Value="@Money(MonthlyTransfers)" ValueColor="Color.Info" Icon="@Icons.Material.Filled.SwapHoriz" IconColor="Color.Info"
+                      Caption="Umbuchungen zwischen Konten" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <StatCard Title="Frei verfügbar / Monat" Value="@Money(MonthlyIncome - MonthlyExpenses - MonthlyTransfers)"
+                      ValueColor="@(MonthlyIncome - MonthlyExpenses - MonthlyTransfers >= 0 ? Color.Success : Color.Error)"
+                      Icon="@Icons.Material.Filled.Wallet" Caption="nach Fixkosten & Sparraten" />
+        </MudItem>
+    </MudGrid>
+
+    @if (!Finance.Recurring.Any())
+    {
+        <EmptyState Icon="@Icons.Material.Filled.EventRepeat" Title="Noch keine Daueraufträge"
+                    Text="Lege Miete, Gehalt, Abos oder Sparraten einmal an – MonExA bucht sie dann automatisch.">
+            @if (Finance.CanEdit)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OpenCreate">Ersten Dauerauftrag anlegen</MudButton>
+            }
+        </EmptyState>
+    }
+    else
+    {
+        <MudTable Items="@Finance.Recurring.OrderBy(r => !r.IsActive).ThenBy(r => r.NextDue)" Hover="true" Dense="true" Elevation="0" Outlined="true" Breakpoint="Breakpoint.Sm">
+            <HeaderContent>
+                <MudTh>Bezeichnung</MudTh>
+                <MudTh>Intervall</MudTh>
+                <MudTh>Nächste Fälligkeit</MudTh>
+                <MudTh>Konto</MudTh>
+                <MudTh Style="text-align: right;">Betrag</MudTh>
+                <MudTh Style="text-align: right;">pro Monat</MudTh>
+                <MudTh Style="text-align: center;">Aktiv</MudTh>
+                <MudTh Style="text-align: right;">Aktionen</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Bezeichnung">
+                    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                        @{ var category = Finance.GetCategory(context.CategoryId); }
+                        <MudAvatar Size="Size.Small" Variant="Variant.Outlined" Color="@(category != null ? ParseColor(category.Color) : TransactionTypeColor(context.Type))">
+                            <MudIcon Icon="@(category != null ? Icon(category.Icon) : TransactionTypeIcon(context.Type))" Size="Size.Small" />
+                        </MudAvatar>
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.body2"><strong>@context.Description</strong></MudText>
+                            <MudText Typo="Typo.caption">
+                                @(context.Type == TransactionType.Umbuchung ? $"Umbuchung → {Finance.AccountName(context.ToAccountId)}" : category?.Name ?? "Ohne Kategorie")
+                                @if (!context.AutoBook) { <span> · manuell</span> }
+                            </MudText>
+                        </MudStack>
+                    </MudStack>
+                </MudTd>
+                <MudTd DataLabel="Intervall">@IntervalText(context.Interval)</MudTd>
+                <MudTd DataLabel="Fällig">
+                    @if (context.IsActive)
+                    {
+                        var days = (context.NextDue.Date - DateTime.Today).Days;
+                        <MudText Typo="Typo.body2" Color="@(days < 0 ? Color.Error : days <= 3 ? Color.Warning : Color.Default)">
+                            @Date(context.NextDue)
+                        </MudText>
+                        <MudText Typo="Typo.caption">@(days < 0 ? $"seit {-days} Tagen überfällig" : days == 0 ? "heute" : $"in {days} Tagen")</MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2">–</MudText>
+                    }
+                    @if (context.EndDate.HasValue)
+                    {
+                        <MudText Typo="Typo.caption" Class="d-block">bis @Date(context.EndDate.Value)</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Konto">@Finance.AccountName(context.AccountId)</MudTd>
+                <MudTd DataLabel="Betrag" Style="text-align: right;">
+                    <MudText Typo="Typo.body2" Color="@TransactionTypeColor(context.Type)">@Money(context.Amount)</MudText>
+                </MudTd>
+                <MudTd DataLabel="pro Monat" Style="text-align: right;">@Money(FinanceState.MonthlyEquivalent(context))</MudTd>
+                <MudTd DataLabel="Aktiv" Style="text-align: center;">
+                    <MudSwitch T="bool" Value="context.IsActive" ValueChanged="@(v => ToggleActive(context, v))" Color="Color.Success" Disabled="@(!Finance.CanEdit)" />
+                </MudTd>
+                <MudTd DataLabel="Aktionen" Style="text-align: right; white-space: nowrap;">
+                    @if (Finance.CanEdit)
+                    {
+                        <MudTooltip Text="Nächsten Termin jetzt buchen">
+                            <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Color="Color.Success" Size="Size.Small" OnClick="@(() => BookNow(context))" Disabled="@(!context.IsActive)" />
+                        </MudTooltip>
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small" OnClick="@(() => OpenEdit(context))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => Delete(context))" />
+                    }
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+</MudContainer>
+
+<MudDialog @bind-Visible="_dialogOpen" Options="@(new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true })">
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@(_isEdit ? Icons.Material.Filled.Edit : Icons.Material.Filled.Add)" Class="mr-2 mb-1" />
+            @(_isEdit ? "Dauerauftrag bearbeiten" : "Neuer Dauerauftrag")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="_valid">
+            <MudStack Spacing="3">
+                <MudToggleGroup T="TransactionType" Value="_model.Type" ValueChanged="SetType" Color="Color.Primary" Outlined="true" CheckMark="true">
+                    @foreach (var type in Enum.GetValues<TransactionType>())
+                    {
+                        <MudToggleItem Value="@type" Text="@type.ToString()" />
+                    }
+                </MudToggleGroup>
+                <MudTextField @bind-Value="_model.Description" Label="Bezeichnung" Variant="Variant.Outlined" Required="true" RequiredError="Pflichtfeld" Immediate="true" />
+                <MudStack Row="true" Spacing="2">
+                    <MudNumericField @bind-Value="_model.Amount" Label="Betrag" Variant="Variant.Outlined" Format="N2" Culture="@De" HideSpinButtons="true"
+                                     Adornment="Adornment.Start" AdornmentText="€" Required="true"
+                                     Validation="@(new Func<decimal, string?>(v => v > 0 ? null : "Betrag muss größer als 0 sein"))" />
+                    <MudSelect @bind-Value="_model.Interval" Label="Intervall" Variant="Variant.Outlined">
+                        @foreach (var interval in Enum.GetValues<RecurrenceInterval>())
+                        {
+                            <MudSelectItem Value="@interval">@IntervalText(interval)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudStack>
+                <MudSelect T="Guid" @bind-Value="_model.AccountId" Label="@(_model.Type == TransactionType.Umbuchung ? "Von Konto" : "Konto")" Variant="Variant.Outlined"
+                           Validation="@(new Func<Guid, string?>(id => id == Guid.Empty ? "Konto ist erforderlich" : null))">
+                    @foreach (var account in Finance.ActiveAccounts)
+                    {
+                        <MudSelectItem Value="@account.Id">@account.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                @if (_model.Type == TransactionType.Umbuchung)
+                {
+                    <MudSelect T="Guid?" @bind-Value="_model.ToAccountId" Label="Nach Konto" Variant="Variant.Outlined" Required="true" RequiredError="Zielkonto ist erforderlich">
+                        @foreach (var account in Finance.ActiveAccounts.Where(a => a.Id != _model.AccountId))
+                        {
+                            <MudSelectItem T="Guid?" Value="@account.Id">@account.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+                else
+                {
+                    <MudSelect T="Guid?" @bind-Value="_model.CategoryId" Label="Kategorie" Variant="Variant.Outlined" Clearable="true">
+                        @foreach (var category in Finance.Categories.Where(c => c.IsActive && (c.Type == CategoryType.Einnahme) == (_model.Type == TransactionType.Einnahme)))
+                        {
+                            <MudSelectItem T="Guid?" Value="@category.Id">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudIcon Icon="@Icon(category.Icon)" Size="Size.Small" Color="@ParseColor(category.Color)" />
+                                    <MudText>@category.Name</MudText>
+                                </MudStack>
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+                <MudStack Row="true" Spacing="2">
+                    <MudDatePicker @bind-Date="_nextDue" Label="Nächste Fälligkeit" Variant="Variant.Outlined" DateFormat="dd.MM.yyyy" Culture="@De" FirstDayOfWeek="DayOfWeek.Monday" Required="true" />
+                    <MudDatePicker @bind-Date="_endDate" Label="Enddatum (optional)" Variant="Variant.Outlined" DateFormat="dd.MM.yyyy" Culture="@De" FirstDayOfWeek="DayOfWeek.Monday" Clearable="true" />
+                </MudStack>
+                <MudSwitch T="bool" @bind-Value="_model.AutoBook" Color="Color.Primary" Label="Fällige Termine automatisch buchen" />
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _dialogOpen = false)">Abbrechen</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save">Speichern</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private bool _dialogOpen;
+    private bool _isEdit;
+    private bool _valid;
+    private MudForm? _form;
+    private RecurringTransaction _model = new();
+    private DateTime? _nextDue;
+    private DateTime? _endDate;
+
+    private IEnumerable<RecurringTransaction> Active => Finance.Recurring.Where(r => r.IsActive);
+    private IEnumerable<RecurringTransaction> DueCount => Active.Where(r => r.NextDue.Date <= DateTime.Today);
+
+    private decimal MonthlyExpenses => Active.Where(r => r.Type == TransactionType.Ausgabe).Sum(FinanceState.MonthlyEquivalent);
+    private decimal MonthlyIncome => Active.Where(r => r.Type == TransactionType.Einnahme).Sum(FinanceState.MonthlyEquivalent);
+    private decimal MonthlyTransfers => Active.Where(r => r.Type == TransactionType.Umbuchung).Sum(FinanceState.MonthlyEquivalent);
+
+    private void OpenCreate()
+    {
+        _model = new RecurringTransaction { AccountId = Finance.ActiveAccounts.FirstOrDefault()?.Id ?? Guid.Empty };
+        _nextDue = DateTime.Today;
+        _endDate = null;
+        _isEdit = false;
+        _dialogOpen = true;
+    }
+
+    private void OpenEdit(RecurringTransaction recurring)
+    {
+        _model = recurring.Clone();
+        _nextDue = recurring.NextDue;
+        _endDate = recurring.EndDate;
+        _isEdit = true;
+        _dialogOpen = true;
+    }
+
+    private void SetType(TransactionType type)
+    {
+        _model.Type = type;
+        _model.CategoryId = null;
+        if (type != TransactionType.Umbuchung) _model.ToAccountId = null;
+    }
+
+    private async Task Save()
+    {
+        if (_form != null) await _form.Validate();
+        if (_form?.IsValid != true || !_nextDue.HasValue) return;
+        _model.NextDue = _nextDue.Value.Date;
+        _model.EndDate = _endDate?.Date;
+        if (await Finance.SaveRecurringAsync(_model))
+        {
+            Snackbar.Add("Dauerauftrag gespeichert.", Severity.Success);
+            _dialogOpen = false;
+            if (_model.AutoBook && _model.NextDue <= DateTime.Today)
+                await Finance.BookDueRecurringAsync(silent: false);
+        }
+    }
+
+    private async Task ToggleActive(RecurringTransaction recurring, bool active)
+    {
+        var copy = recurring.Clone();
+        copy.IsActive = active;
+        await Finance.SaveRecurringAsync(copy);
+    }
+
+    private async Task BookNow(RecurringTransaction recurring)
+    {
+        if (await Finance.BookRecurringNowAsync(recurring.Id))
+            Snackbar.Add($"„{recurring.Description}“ wurde für den {Date(recurring.NextDue)} gebucht.", Severity.Success);
+    }
+
+    private async Task BookDue()
+    {
+        var count = await Finance.BookDueRecurringAsync(includeManual: true);
+        Snackbar.Add(count > 0 ? $"{count} Buchung(en) erstellt." : "Keine fälligen Buchungen.", Severity.Info);
+    }
+
+    private async Task Delete(RecurringTransaction recurring)
+    {
+        if (!await ConfirmAsync("Dauerauftrag löschen",
+                $"Soll der Dauerauftrag <strong>{recurring.Description}</strong> gelöscht werden? Bereits erzeugte Buchungen bleiben erhalten."))
+            return;
+        if (await Finance.DeleteRecurringAsync(recurring.Id))
+            Snackbar.Add("Dauerauftrag gelöscht.", Severity.Success);
+    }
+}

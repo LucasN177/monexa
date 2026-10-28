@@ -1,127 +1,122 @@
 @page "/budgets"
+@inherits FinancePage
+@inject PreferencesService Preferences
 
-<PageTitle>Budgets</PageTitle>
+<PageTitle>Budgets – MonExA</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="pa-4">
 
     @* ── Header ── *@
-    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6">
-        <MudStack Spacing="0">
-            <MudText Typo="Typo.h4" Color="Color.Default">
-                <MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" Class="mr-2 mb-1" />
-                Budgets
-            </MudText>
-            <MudText Typo="Typo.body2" Color="Color.Primary">
-                Verwalte deine monatlichen Ausgabenlimits – @DateTime.Now.ToString("MMMM yyyy")
-            </MudText>
-        </MudStack>
-        <MudButton Variant="Variant.Filled"
-                   Color="Color.Primary"
-                   StartIcon="@Icons.Material.Filled.Add"
-                   OnClick="OpenCreateDialog"
-                   Size="Size.Medium">
-            Neues Budget
-        </MudButton>
-    </MudStack>
+    <PageHeader Title="Budgets" Icon="@Icons.Material.Filled.AccountBalanceWallet"
+                Subtitle="@($"Verwalte deine Ausgabenlimits – Stichtag {Date(_reference)}")">
+        <Actions>
+            <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Variant="Variant.Outlined" Size="Size.Small" OnClick="@(() => _reference = _reference.AddMonths(-1))" />
+            <MudText Typo="Typo.subtitle1" Style="min-width:130px; text-align:center;">@MonthYear(_reference)</MudText>
+            <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Variant="Variant.Outlined" Size="Size.Small"
+                           Disabled="@IsCurrentMonth" OnClick="@(() => _reference = MoveForward())" />
+            @if (Finance.CanEdit)
+            {
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="OpenCreateDialog">
+                    Neues Budget
+                </MudButton>
+            }
+        </Actions>
+    </PageHeader>
 
-    @* ── KPI Summary Cards ── *@
+    @* ── KPI Summary Cards (auf Monat umgerechnet) ── *@
     <MudGrid Class="mb-6">
         <MudItem xs="12" sm="4">
-            <MudPaper Elevation="0" Outlined="true" Class="pa-4">
-                <MudStack Spacing="1">
-                    <MudText Typo="Typo.caption" Color="Color.Primary">GESAMTBUDGET</MudText>
-                    <MudText Typo="Typo.h5" Color="Color.Default">@FormatCurrency(TotalBudget)</MudText>
-                    <MudText Typo="Typo.caption" Color="Color.Primary">@BudgetsList.Count Kategorien</MudText>
-                </MudStack>
-            </MudPaper>
+            <StatCard Title="Gesamtbudget / Monat" Value="@MoneyShort(TotalBudget)" Caption="@($"{CategoryBudgets.Count()} Kategorie-Budgets")" Icon="@Icons.Material.Filled.AccountBalanceWallet" />
         </MudItem>
         <MudItem xs="12" sm="4">
-            <MudPaper Elevation="0" Outlined="true" Class="pa-4">
-                <MudStack Spacing="1">
-                    <MudText Typo="Typo.caption" Color="Color.Primary">AUSGEGEBEN</MudText>
-                    <MudText Typo="Typo.h5" Color="Color.Error">@FormatCurrency(TotalSpent)</MudText>
-                    <MudText Typo="Typo.caption" Color="Color.Primary">@SpentPercent.ToString("0")% des Gesamtbudgets</MudText>
-                </MudStack>
-            </MudPaper>
+            <StatCard Title="Ausgegeben" Value="@MoneyShort(TotalSpent)" ValueColor="Color.Error" Caption="@($"{Percent(SpentPercent)} des Gesamtbudgets")" Icon="@Icons.Material.Filled.ShoppingCart" IconColor="Color.Error" />
         </MudItem>
         <MudItem xs="12" sm="4">
-            <MudPaper Elevation="0" Outlined="true" Class="pa-4">
-                <MudStack Spacing="1">
-                    <MudText Typo="Typo.caption" Color="Color.Primary">VERBLEIBEND</MudText>
-                    <MudText Typo="Typo.h5" Color="Color.Success">@FormatCurrency(TotalRemaining)</MudText>
-                    <MudText Typo="Typo.caption" Color="Color.Primary">noch verfügbar</MudText>
-                </MudStack>
-            </MudPaper>
+            <StatCard Title="Verbleibend" Value="@MoneyShort(TotalBudget - TotalSpent)" ValueColor="@(TotalBudget - TotalSpent >= 0 ? Color.Success : Color.Error)"
+                      Caption="noch verfügbar" Icon="@Icons.Material.Filled.Savings" IconColor="Color.Success" />
         </MudItem>
     </MudGrid>
 
     @* ── Filter / Search Bar ── *@
-    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3" Class="mb-4">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3" Class="mb-4" Wrap="Wrap.Wrap">
         <MudTextField @bind-Value="_searchText"
                       Placeholder="Budget suchen…"
                       Adornment="Adornment.Start"
                       AdornmentIcon="@Icons.Material.Filled.Search"
                       Variant="Variant.Outlined"
                       Margin="Margin.Dense"
+                      Immediate="true"
                       Clearable="true"
                       Class="flex-grow-1" />
-        <MudSelect @bind-Value="_selectedPeriod"
+        <MudSelect T="BudgetPeriod?" @bind-Value="_selectedPeriod"
                    Label="Zeitraum"
                    Variant="Variant.Outlined"
                    Margin="Margin.Dense"
+                   Clearable="true"
                    Style="min-width:160px;">
-            <MudSelectItem Value="@("monthly")">Monatlich</MudSelectItem>
-            <MudSelectItem Value="@("weekly")">Wöchentlich</MudSelectItem>
-            <MudSelectItem Value="@("yearly")">Jährlich</MudSelectItem>
+            @foreach (var period in Enum.GetValues<BudgetPeriod>())
+            {
+                <MudSelectItem T="BudgetPeriod?" Value="@period">@PeriodText(period)</MudSelectItem>
+            }
         </MudSelect>
-        <MudToggleIconButton @bind-Toggled="_showOnlyOverBudget"
-                             Icon="@Icons.Material.Filled.FilterAlt"
-                             ToggledIcon="@Icons.Material.Filled.FilterAlt"
-                             ToggledColor="Color.Error"
-                             Title="Nur Überschreitungen anzeigen" />
+        <MudTooltip Text="Nur Überschreitungen anzeigen">
+            <MudToggleIconButton @bind-Toggled="_showOnlyOverBudget"
+                                 Icon="@Icons.Material.Filled.FilterAlt"
+                                 ToggledIcon="@Icons.Material.Filled.FilterAlt"
+                                 ToggledColor="Color.Error" />
+        </MudTooltip>
     </MudStack>
 
     @* ── Budget Cards ── *@
     @if (!FilteredBudgets.Any())
     {
-        <MudPaper Elevation="0" Outlined="true" Class="pa-8 d-flex flex-column align-center justify-center">
-            <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" Color="Color.Primary" Class="mb-3" />
-            <MudText Typo="Typo.h6" Color="Color.Primary">Keine Budgets gefunden</MudText>
-            <MudText Typo="Typo.body2" Color="Color.Primary">Passe deine Filter an oder erstelle ein neues Budget.</MudText>
-        </MudPaper>
+        <EmptyState Title="Keine Budgets gefunden" Text="Passe deine Filter an oder erstelle ein neues Budget.">
+            @if (Finance.CanEdit && !Finance.Budgets.Any())
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OpenCreateDialog">Erstes Budget anlegen</MudButton>
+            }
+        </EmptyState>
     }
     else
     {
         <MudGrid>
-            @foreach (var budget in FilteredBudgets)
+            @foreach (var b in FilteredBudgets)
             {
-                var percent = budget.Limit > 0 ? (double)budget.Spent / (double)budget.Limit * 100 : 0;
-                var isOver = percent > 100;
-                var progressColor = percent >= 100 ? Color.Error : percent >= 80 ? Color.Warning : Color.Success;
-                var remaining = budget.Limit - budget.Spent;
+                var budget = b.Budget;
+                var percent = b.Percent;
+                var progressColor = percent >= 100 ? Color.Error : percent >= Preferences.BudgetWarningPercent ? Color.Warning : Color.Success;
+                var remaining = budget.Limit - b.Spent;
 
                 <MudItem xs="12" sm="6" md="4">
                     <MudCard Outlined="true" Elevation="0">
                         <MudCardHeader>
                             <CardHeaderAvatar>
-                                <MudAvatar Color="@budget.AvatarColor" Variant="Variant.Filled">
-                                    <MudIcon Icon="@budget.Icon" />
+                                <MudAvatar Color="@ParseColor(budget.Color)" Variant="Variant.Filled">
+                                    <MudIcon Icon="@Icon(budget.Icon)" />
                                 </MudAvatar>
                             </CardHeaderAvatar>
                             <CardHeaderContent>
                                 <MudText Typo="Typo.subtitle1">@budget.Name</MudText>
-                                <MudText Typo="Typo.caption" Color="Color.Primary">@budget.Period</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Primary">
+                                    @PeriodText(budget.Period) · @(budget.CategoryId == null ? "Alle Ausgaben" : Finance.CategoryName(budget.CategoryId))
+                                </MudText>
                             </CardHeaderContent>
                             <CardHeaderActions>
                                 <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true">
-                                    <MudMenuItem Icon="@Icons.Material.Filled.Edit"
-                                                 OnClick="@(() => OpenEditDialog(budget))">
-                                        Bearbeiten
-                                    </MudMenuItem>
-                                    <MudMenuItem Icon="@Icons.Material.Filled.Delete"
-                                                 OnClick="@(() => ConfirmDelete(budget))">
-                                        <MudText Color="Color.Error">Löschen</MudText>
-                                    </MudMenuItem>
+                                    @if (budget.CategoryId != null)
+                                    {
+                                        <MudMenuItem Icon="@Icons.Material.Filled.Receipt" Href="@($"transaktionen?kategorie={budget.CategoryId}")">Transaktionen</MudMenuItem>
+                                    }
+                                    @if (Finance.CanEdit)
+                                    {
+                                        <MudMenuItem Icon="@Icons.Material.Filled.Edit" OnClick="@(() => OpenEditDialog(budget))">Bearbeiten</MudMenuItem>
+                                        <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" OnClick="@(() => ConfirmDelete(budget))">
+                                            <MudText Color="Color.Error">Löschen</MudText>
+                                        </MudMenuItem>
+                                    }
                                 </MudMenu>
                             </CardHeaderActions>
                         </MudCardHeader>
@@ -129,47 +124,47 @@
                         <MudCardContent>
                             @* Progress Bar *@
                             <MudProgressLinear Value="@Math.Min(percent, 100)"
-                                              Color="@progressColor"
-                                              Rounded="true"
-                                              Size="Size.Medium"
-                                              Class="mb-2" />
+                                               Color="@progressColor"
+                                               Rounded="true"
+                                               Size="Size.Medium"
+                                               Class="mb-2" />
 
                             @* Spent / Limit *@
                             <MudStack Row="true" Justify="Justify.SpaceBetween">
-                                <MudText Typo="Typo.body2" Color="Color.Primary">
-                                    Ausgegeben: <strong>@FormatCurrency(budget.Spent)</strong>
+                                <MudText Typo="Typo.body2">
+                                    Ausgegeben: <strong>@MoneyShort(b.Spent)</strong>
                                 </MudText>
-                                <MudText Typo="Typo.body2" Color="Color.Primary">
-                                    Limit: <strong>@FormatCurrency(budget.Limit)</strong>
+                                <MudText Typo="Typo.body2">
+                                    Limit: <strong>@MoneyShort(budget.Limit)</strong>
                                 </MudText>
                             </MudStack>
+                            <MudText Typo="Typo.caption">@Date(b.Start) – @Date(b.End.AddDays(-1))</MudText>
 
                             @* Status Chip *@
                             <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mt-2">
-                                @if (isOver)
+                                @if (remaining < 0)
                                 {
-                                    <MudChip T="string"
-                                             Color="Color.Error"
-                                             Size="Size.Small"
-                                             Icon="@Icons.Material.Filled.Warning"
-                                             Variant="Variant.Filled">
-                                        @FormatCurrency(Math.Abs(remaining)) überschritten
+                                    <MudChip T="string" Color="Color.Error" Size="Size.Small" Icon="@Icons.Material.Filled.Warning" Variant="Variant.Filled">
+                                        @MoneyShort(Math.Abs(remaining)) überschritten
                                     </MudChip>
                                 }
                                 else
                                 {
-                                    <MudChip T="string"
-                                             Color="Color.Success"
-                                             Size="Size.Small"
-                                             Icon="@Icons.Material.Filled.CheckCircle"
-                                             Variant="Variant.Text">
-                                        @FormatCurrency(remaining) verbleibend
+                                    <MudChip T="string" Color="Color.Success" Size="Size.Small" Icon="@Icons.Material.Filled.CheckCircle" Variant="Variant.Text">
+                                        @MoneyShort(remaining) verbleibend
                                     </MudChip>
                                 }
-                                <MudText Typo="Typo.caption" Color="@progressColor">
-                                    @percent.ToString("0")%
-                                </MudText>
+                                <MudText Typo="Typo.caption" Color="@progressColor">@percent.ToString("0")%</MudText>
                             </MudStack>
+
+                            @if (b.Forecast.HasValue && remaining >= 0)
+                            {
+                                <MudText Typo="Typo.caption" Color="@(b.Forecast > budget.Limit ? Color.Warning : Color.Default)" Class="mt-1 d-block">
+                                    <MudIcon Icon="@Icons.Material.Filled.Insights" Size="Size.Small" Style="vertical-align: middle;" />
+                                    Hochrechnung bis Periodenende: @MoneyShort(b.Forecast.Value)
+                                    @if (b.Forecast > budget.Limit) { <span>– Limit wird voraussichtlich überschritten</span> }
+                                </MudText>
+                            }
                         </MudCardContent>
                     </MudCard>
                 </MudItem>
@@ -182,19 +177,35 @@
 <MudDialog @bind-Visible="_dialogVisible" Options="_dialogOptions">
     <TitleContent>
         <MudText Typo="Typo.h6">
-            <MudIcon Icon="@(_editingBudget == null ? Icons.Material.Filled.Add : Icons.Material.Filled.Edit)"
-                     Class="mr-2 mb-1" />
+            <MudIcon Icon="@(_editingBudget == null ? Icons.Material.Filled.Add : Icons.Material.Filled.Edit)" Class="mr-2 mb-1" />
             @(_editingBudget == null ? "Neues Budget" : "Budget bearbeiten")
         </MudText>
     </TitleContent>
     <DialogContent>
-        <MudForm @ref="_form" Class="pa-2">
+        <MudForm @ref="_form" @bind-IsValid="_formValid" Class="pa-2">
             <MudStack Spacing="4">
+                <MudSelect T="Guid?" Value="_dialogModel.CategoryId" ValueChanged="OnCategoryChanged"
+                           Label="Kategorie"
+                           Variant="Variant.Outlined"
+                           HelperText="Gegen welche Ausgaben läuft das Limit?">
+                    <MudSelectItem T="Guid?" Value="@((Guid?)null)">Alle Ausgaben</MudSelectItem>
+                    @foreach (var category in Finance.Categories.Where(c => c.Type == CategoryType.Ausgabe))
+                    {
+                        <MudSelectItem T="Guid?" Value="@category.Id">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icon(category.Icon)" Size="Size.Small" Color="@ParseColor(category.Color)" />
+                                <MudText>@category.Name</MudText>
+                            </MudStack>
+                        </MudSelectItem>
+                    }
+                </MudSelect>
+
                 <MudTextField @bind-Value="_dialogModel.Name"
-                              Label="Kategorie"
+                              Label="Bezeichnung"
                               Variant="Variant.Outlined"
                               Required="true"
                               RequiredError="Pflichtfeld"
+                              Immediate="true"
                               Adornment="Adornment.Start"
                               AdornmentIcon="@Icons.Material.Filled.Label" />
 
@@ -203,8 +214,11 @@
                                  Variant="Variant.Outlined"
                                  Required="true"
                                  RequiredError="Pflichtfeld"
-                                 Min="1"
+                                 Validation="@(new Func<decimal, string?>(v => v > 0 ? null : "Limit muss größer als 0 sein"))"
+                                 Min="0m"
                                  Format="N2"
+                                 Culture="@De"
+                                 HideSpinButtons="true"
                                  Adornment="Adornment.Start"
                                  AdornmentIcon="@Icons.Material.Filled.Euro" />
 
@@ -212,17 +226,18 @@
                            Label="Zeitraum"
                            Variant="Variant.Outlined"
                            Required="true">
-                    <MudSelectItem Value="@("Monatlich")">Monatlich</MudSelectItem>
-                    <MudSelectItem Value="@("Wöchentlich")">Wöchentlich</MudSelectItem>
-                    <MudSelectItem Value="@("Jährlich")">Jährlich</MudSelectItem>
+                    @foreach (var period in Enum.GetValues<BudgetPeriod>())
+                    {
+                        <MudSelectItem Value="@period">@PeriodText(period)</MudSelectItem>
+                    }
                 </MudSelect>
 
                 <MudSelect @bind-Value="_dialogModel.Icon"
                            Label="Symbol"
                            Variant="Variant.Outlined">
-                    @foreach (var (label, icon) in _iconOptions)
+                    @foreach (var (label, icon) in CategoryIcons)
                     {
-                        <MudSelectItem Value="@icon">
+                        <MudSelectItem Value="@label">
                             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                                 <MudIcon Icon="@icon" Size="Size.Small" />
                                 <MudText>@label</MudText>
@@ -231,15 +246,18 @@
                     }
                 </MudSelect>
 
-                <MudSelect @bind-Value="_dialogModel.AvatarColor"
+                <MudSelect @bind-Value="_dialogModel.Color"
                            Label="Farbe"
                            Variant="Variant.Outlined">
-                    <MudSelectItem Value="Color.Primary">Blau</MudSelectItem>
-                    <MudSelectItem Value="Color.Primary">Lila</MudSelectItem>
-                    <MudSelectItem Value="Color.Success">Grün</MudSelectItem>
-                    <MudSelectItem Value="Color.Warning">Orange</MudSelectItem>
-                    <MudSelectItem Value="Color.Error">Rot</MudSelectItem>
-                    <MudSelectItem Value="Color.Info">Hellblau</MudSelectItem>
+                    @foreach (var (key, label, color) in ColorOptions)
+                    {
+                        <MudSelectItem Value="@key">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Circle" Color="@color" Size="Size.Small" />
+                                <MudText>@label</MudText>
+                            </MudStack>
+                        </MudSelectItem>
+                    }
                 </MudSelect>
             </MudStack>
         </MudForm>
@@ -249,85 +267,29 @@
         <MudButton OnClick="SaveBudget"
                    Color="Color.Primary"
                    Variant="Variant.Filled"
+                  
                    StartIcon="@Icons.Material.Filled.Save">
             Speichern
         </MudButton>
     </DialogActions>
 </MudDialog>
 
-@* ── Delete Confirmation Dialog ── *@
-<MudDialog @bind-Visible="_deleteDialogVisible" Options="new DialogOptions { MaxWidth = MaxWidth.ExtraSmall }">
-    <TitleContent>
-        <MudText Typo="Typo.h6" Color="Color.Error">
-            <MudIcon Icon="@Icons.Material.Filled.Delete" Class="mr-2 mb-1" />
-            Budget löschen
-        </MudText>
-    </TitleContent>
-    <DialogContent>
-        <MudText>
-            Soll das Budget <strong>@_budgetToDelete?.Name</strong> wirklich gelöscht werden?
-            Diese Aktion kann nicht rückgängig gemacht werden.
-        </MudText>
-    </DialogContent>
-    <DialogActions>
-        <MudButton OnClick="@(() => _deleteDialogVisible = false)" Variant="Variant.Text">
-            Abbrechen
-        </MudButton>
-        <MudButton OnClick="DeleteBudget"
-                   Color="Color.Error"
-                   Variant="Variant.Filled"
-                   StartIcon="@Icons.Material.Filled.Delete">
-            Löschen
-        </MudButton>
-    </DialogActions>
-</MudDialog>
-
 @code {
 
-    // ── Models ────────────────────────────────────────────────────────────────
-
-    private class BudgetItem
-    {
-        public Guid Id { get; set; } = Guid.NewGuid();
-        public string Name { get; set; } = string.Empty;
-        public decimal Limit { get; set; }
-        public decimal Spent { get; set; }
-        public string Period { get; set; } = "Monatlich";
-        public string Icon { get; set; } = Icons.Material.Filled.ShoppingCart;
-        public Color AvatarColor { get; set; } = Color.Primary;
-    }
-
-    private class BudgetFormModel
-    {
-        public string Name { get; set; } = string.Empty;
-        public decimal Limit { get; set; }
-        public string Period { get; set; } = "Monatlich";
-        public string Icon { get; set; } = Icons.Material.Filled.ShoppingCart;
-        public Color AvatarColor { get; set; } = Color.Primary;
-    }
+    private record BudgetView(Budget Budget, decimal Spent, double Percent, DateTime Start, DateTime End, decimal? Forecast);
 
     // ── State ─────────────────────────────────────────────────────────────────
 
-    private List<BudgetItem> BudgetsList = new()
-    {
-        new() { Name = "Lebensmittel",    Limit = 400,  Spent = 320,  Icon = Icons.Material.Filled.LocalGroceryStore, AvatarColor = Color.Success, Period = "Monatlich" },
-        new() { Name = "Transport",       Limit = 150,  Spent = 162,  Icon = Icons.Material.Filled.DirectionsCar,    AvatarColor = Color.Warning, Period = "Monatlich" },
-        new() { Name = "Freizeit",        Limit = 200,  Spent = 85,   Icon = Icons.Material.Filled.SportsEsports,    AvatarColor = Color.Primary, Period = "Monatlich" },
-        new() { Name = "Restaurants",     Limit = 180,  Spent = 175,  Icon = Icons.Material.Filled.Restaurant,       AvatarColor = Color.Error, Period = "Monatlich" },
-        new() { Name = "Gesundheit",      Limit = 100,  Spent = 30,   Icon = Icons.Material.Filled.HealthAndSafety,  AvatarColor = Color.Info, Period = "Monatlich" },
-        new() { Name = "Kleidung",        Limit = 120,  Spent = 140,  Icon = Icons.Material.Filled.Checkroom,        AvatarColor = Color.Primary, Period = "Monatlich" },
-    };
-
+    private DateTime _reference = DateTime.Today;
     private string _searchText = string.Empty;
-    private string _selectedPeriod = "monthly";
+    private BudgetPeriod? _selectedPeriod;
     private bool _showOnlyOverBudget;
 
     private MudForm? _form;
+    private bool _formValid;
     private bool _dialogVisible;
-    private bool _deleteDialogVisible;
-    private BudgetItem? _editingBudget;
-    private BudgetItem? _budgetToDelete;
-    private BudgetFormModel _dialogModel = new();
+    private Budget? _editingBudget;
+    private Budget _dialogModel = new();
 
     private readonly DialogOptions _dialogOptions = new()
     {
@@ -336,59 +298,92 @@
         CloseOnEscapeKey = true
     };
 
-    private readonly List<(string Label, string Icon)> _iconOptions = new()
-    {
-        ("Lebensmittel",  Icons.Material.Filled.LocalGroceryStore),
-        ("Transport",     Icons.Material.Filled.DirectionsCar),
-        ("Freizeit",      Icons.Material.Filled.SportsEsports),
-        ("Restaurant",    Icons.Material.Filled.Restaurant),
-        ("Gesundheit",    Icons.Material.Filled.HealthAndSafety),
-        ("Kleidung",      Icons.Material.Filled.Checkroom),
-        ("Wohnen",        Icons.Material.Filled.Home),
-        ("Reisen",        Icons.Material.Filled.FlightTakeoff),
-        ("Bildung",       Icons.Material.Filled.School),
-        ("Sparen",        Icons.Material.Filled.Savings),
-        ("Sonstiges",     Icons.Material.Filled.Category),
-    };
-
     // ── Computed ──────────────────────────────────────────────────────────────
 
-    private IEnumerable<BudgetItem> FilteredBudgets => BudgetsList
+    private bool IsCurrentMonth => _reference.Year == DateTime.Today.Year && _reference.Month == DateTime.Today.Month;
+
+    private DateTime MoveForward()
+    {
+        var next = _reference.AddMonths(1);
+        // Im laufenden Monat immer "heute" als Stichtag, sonst Monatsende.
+        return next.Year == DateTime.Today.Year && next.Month == DateTime.Today.Month
+            ? DateTime.Today
+            : FinanceState.MonthStart(next).AddMonths(1).AddDays(-1);
+    }
+
+    private IEnumerable<BudgetView> AllViews => Finance.Budgets.Select(budget =>
+    {
+        var reference = IsCurrentMonth ? DateTime.Today : FinanceState.MonthStart(_reference).AddMonths(1).AddDays(-1);
+        var (start, end) = FinanceState.PeriodRange(budget.Period, reference);
+        var spent = Finance.BudgetSpent(budget, reference);
+        var percent = budget.Limit > 0 ? (double)(spent / budget.Limit * 100) : 0;
+
+        decimal? forecast = null;
+        var today = DateTime.Today;
+        if (today >= start && today < end)
+        {
+            var elapsed = (today - start).Days + 1;
+            var total = (end - start).Days;
+            if (elapsed >= 3 && elapsed < total) forecast = Math.Round(spent / elapsed * total, 0);
+        }
+        return new BudgetView(budget, spent, percent, start, end, forecast);
+    });
+
+    private IEnumerable<BudgetView> FilteredBudgets => AllViews
         .Where(b => string.IsNullOrWhiteSpace(_searchText)
-                    || b.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
-        .Where(b => !_showOnlyOverBudget || b.Spent > b.Limit);
+                    || b.Budget.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
+        .Where(b => _selectedPeriod == null || b.Budget.Period == _selectedPeriod)
+        .Where(b => !_showOnlyOverBudget || b.Spent > b.Budget.Limit)
+        .OrderByDescending(b => b.Percent);
 
-    private decimal TotalBudget    => BudgetsList.Sum(b => b.Limit);
-    private decimal TotalSpent     => BudgetsList.Sum(b => b.Spent);
-    private decimal TotalRemaining => TotalBudget - TotalSpent;
-    private double  SpentPercent   => TotalBudget > 0 ? (double)TotalSpent / (double)TotalBudget * 100 : 0;
+    /// <summary>Budgets mit Kategorie – das "Alle Ausgaben"-Budget würde sonst doppelt zählen.</summary>
+    private IEnumerable<Budget> CategoryBudgets => Finance.Budgets.Where(b => b.CategoryId != null);
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    private decimal TotalBudget => CategoryBudgets.Sum(FinanceState.MonthlyLimit);
 
-    private static string FormatCurrency(decimal value) =>
-        value.ToString("C0", new System.Globalization.CultureInfo("de-DE"));
+    private decimal TotalSpent
+    {
+        get
+        {
+            var month = FinanceState.MonthStart(_reference);
+            var ids = CategoryBudgets.Select(b => b.CategoryId).ToHashSet();
+            return Finance.InRange(month, month.AddMonths(1))
+                .Where(t => t.Type == TransactionType.Ausgabe && ids.Contains(t.CategoryId))
+                .Sum(t => t.Amount);
+        }
+    }
+
+    private double SpentPercent => TotalBudget > 0 ? (double)(TotalSpent / TotalBudget * 100) : 0;
 
     // ── Dialog Handlers ───────────────────────────────────────────────────────
 
     private void OpenCreateDialog()
     {
         _editingBudget = null;
-        _dialogModel = new BudgetFormModel();
+        _dialogModel = new Budget { Icon = "Shopping", Color = "Primary" };
         _dialogVisible = true;
     }
 
-    private void OpenEditDialog(BudgetItem budget)
+    private void OpenEditDialog(Budget budget)
     {
         _editingBudget = budget;
-        _dialogModel = new BudgetFormModel
-        {
-            Name        = budget.Name,
-            Limit       = budget.Limit,
-            Period      = budget.Period,
-            Icon        = budget.Icon,
-            AvatarColor = budget.AvatarColor
-        };
+        _dialogModel = budget.Clone();
         _dialogVisible = true;
+    }
+
+    private void OnCategoryChanged(Guid? categoryId)
+    {
+        var previous = Finance.GetCategory(_dialogModel.CategoryId);
+        _dialogModel.CategoryId = categoryId;
+        var category = Finance.GetCategory(categoryId);
+        // Name/Icon/Farbe übernehmen, solange der Nutzer sie nicht selbst angepasst hat.
+        if (string.IsNullOrWhiteSpace(_dialogModel.Name) || _dialogModel.Name == previous?.Name || _dialogModel.Name == "Gesamtausgaben")
+            _dialogModel.Name = category?.Name ?? "Gesamtausgaben";
+        if (category != null)
+        {
+            _dialogModel.Icon = category.Icon;
+            _dialogModel.Color = category.Color;
+        }
     }
 
     private void CloseDialog() => _dialogVisible = false;
@@ -399,42 +394,25 @@
         await _form.Validate();
         if (!_form.IsValid) return;
 
-        if (_editingBudget is not null)
+        if (Finance.Budgets.Any(b => b.Id != _dialogModel.Id && b.CategoryId == _dialogModel.CategoryId && b.Period == _dialogModel.Period))
         {
-            _editingBudget.Name        = _dialogModel.Name;
-            _editingBudget.Limit       = _dialogModel.Limit;
-            _editingBudget.Period      = _dialogModel.Period;
-            _editingBudget.Icon        = _dialogModel.Icon;
-            _editingBudget.AvatarColor = _dialogModel.AvatarColor;
-        }
-        else
-        {
-            BudgetsList.Add(new BudgetItem
-            {
-                Name        = _dialogModel.Name,
-                Limit       = _dialogModel.Limit,
-                Period      = _dialogModel.Period,
-                Icon        = _dialogModel.Icon,
-                AvatarColor = _dialogModel.AvatarColor,
-                Spent       = 0
-            });
+            Snackbar.Add("Für diese Kategorie und diesen Zeitraum existiert bereits ein Budget.", Severity.Warning);
+            return;
         }
 
-        CloseDialog();
+        if (await Finance.SaveBudgetAsync(_dialogModel))
+        {
+            Snackbar.Add(_editingBudget == null ? "Budget angelegt." : "Budget gespeichert.", Severity.Success);
+            CloseDialog();
+        }
     }
 
-    private void ConfirmDelete(BudgetItem budget)
+    private async Task ConfirmDelete(Budget budget)
     {
-        _budgetToDelete = budget;
-        _deleteDialogVisible = true;
-    }
-
-    private void DeleteBudget()
-    {
-        if (_budgetToDelete is not null)
-            BudgetsList.Remove(_budgetToDelete);
-
-        _budgetToDelete = null;
-        _deleteDialogVisible = false;
+        if (!await ConfirmAsync("Budget löschen",
+                $"Soll das Budget <strong>{budget.Name}</strong> wirklich gelöscht werden? Diese Aktion kann nicht rückgängig gemacht werden."))
+            return;
+        if (await Finance.DeleteBudgetAsync(budget.Id))
+            Snackbar.Add("Budget gelöscht.", Severity.Success);
     }
 }

@@ -1,130 +1,123 @@
 @page "/konten"
-@using System.ComponentModel.DataAnnotations
-@using monexa.Models.Enums
-@inject NavigationManager NavigationManager
+@inherits FinancePage
 
-<PageTitle>Kontenverwaltung</PageTitle>
+<PageTitle>Kontenverwaltung – MonExA</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
-    <MudText Typo="Typo.h4" Class="mb-4">Kontenverwaltung</MudText>
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-8">
+    <PageHeader Title="Kontenverwaltung" Subtitle="Alle Konten des Projekts und ihre aktuellen Salden">
+        <Actions>
+            @if (Finance.CanEdit)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="konten/neu">
+                    Neues Konto
+                </MudButton>
+            }
+        </Actions>
+    </PageHeader>
 
     <!-- Statistik Cards -->
     <MudGrid Class="mb-4">
         <MudItem xs="12" sm="6" md="3">
-            <MudCard Elevation="2">
-                <MudCardContent>
-                    <MudText Typo="Typo.body2" Color="Color.Primary">Gesamtguthaben</MudText>
-                    <MudText Typo="Typo.h5" Color="Color.Success">@GetTotalBalance().ToString("C", new System.Globalization.CultureInfo("de-DE"))</MudText>
-                </MudCardContent>
-            </MudCard>
+            <StatCard Title="Gesamtguthaben" Value="@Money(Finance.NetWorth)"
+                      ValueColor="@(Finance.NetWorth >= 0 ? Color.Success : Color.Error)"
+                      Caption="Summe aller aktiven Konten" Icon="@Icons.Material.Filled.AccountBalance" />
         </MudItem>
         <MudItem xs="12" sm="6" md="3">
-            <MudCard Elevation="2">
-                <MudCardContent>
-                    <MudText Typo="Typo.body2" Color="Color.Primary">Anzahl Konten</MudText>
-                    <MudText Typo="Typo.h5">@accounts.Count</MudText>
-                </MudCardContent>
-            </MudCard>
+            <StatCard Title="Liquide Mittel" Value="@Money(LiquidBalance)"
+                      Caption="Giro, Tagesgeld & Sparkonten" Icon="@Icons.Material.Filled.Payments" IconColor="Color.Info" />
         </MudItem>
         <MudItem xs="12" sm="6" md="3">
-            <MudCard Elevation="2">
-                <MudCardContent>
-                    <MudText Typo="Typo.body2" Color="Color.Primary">Aktive Konten</MudText>
-                    <MudText Typo="Typo.h5" Color="Color.Info">@accounts.Count(a => a.IsActive)</MudText>
-                </MudCardContent>
-            </MudCard>
+            <StatCard Title="Aktive Konten" Value="@Finance.Accounts.Count(a => a.IsActive).ToString()" ValueColor="Color.Info"
+                      Caption="@($"von {Finance.Accounts.Count} Konten")" Icon="@Icons.Material.Filled.CheckCircle" IconColor="Color.Success" />
         </MudItem>
         <MudItem xs="12" sm="6" md="3">
-            <MudCard Elevation="2">
-                <MudCardContent>
-                    <MudText Typo="Typo.body2" Color="Color.Primary">Inaktive Konten</MudText>
-                    <MudText Typo="Typo.h5" Color="Color.Warning">@accounts.Count(a => !a.IsActive)</MudText>
-                </MudCardContent>
-            </MudCard>
+            <StatCard Title="Verbindlichkeiten" Value="@Money(Debts)" ValueColor="@(Debts < 0 ? Color.Error : Color.Default)"
+                      Caption="Negative Kontostände" Icon="@Icons.Material.Filled.CreditCard" IconColor="Color.Warning" />
         </MudItem>
     </MudGrid>
 
     <!-- Action Bar -->
-    <MudPaper Class="pa-4 mb-4" Elevation="1">
-        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-            <MudTextField @bind-Value="searchString" 
-                          Placeholder="Konten durchsuchen..." 
-                          Adornment="Adornment.Start" 
-                          AdornmentIcon="@Icons.Material.Filled.Search" 
-                          IconSize="Size.Medium" 
-                          Class="flex-grow-1"
+    <MudPaper Class="pa-4 mb-4" Elevation="0" Outlined="true">
+        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="gap-2">
+            <MudTextField @bind-Value="searchString"
+                          Placeholder="Konten durchsuchen..."
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          IconSize="Size.Medium"
                           Immediate="true"
-                          Style="max-width: 400px;"/>
-            <MudButton Variant="Variant.Filled" 
-                       Color="Color.Primary" 
-                       StartIcon="@Icons.Material.Filled.Add"
-                       OnClick="OpenCreateDialog">
-                Neues Konto
-            </MudButton>
+                          Clearable="true"
+                          Style="max-width: 400px;" />
+            <MudSwitch T="bool" @bind-Value="showInactive" Label="Inaktive anzeigen" Color="Color.Primary" />
         </MudStack>
     </MudPaper>
 
     <!-- Konten Table -->
-    <MudTable Items="@GetFilteredAccounts()" 
-              Hover="true" 
-              Striped="true" 
+    <MudTable Items="@GetFilteredAccounts()"
+              Hover="true"
+              Striped="true"
               Dense="true"
-              Elevation="2">
+              Elevation="0"
+              Outlined="true"
+              Breakpoint="Breakpoint.Sm"
+              OnRowClick="@((TableRowClickEventArgs<Konto> e) => ViewDetails(e.Item!))"
+              RowStyle="cursor: pointer;">
         <HeaderContent>
             <MudTh>Status</MudTh>
-            <MudTh>Kontoname</MudTh>
+            <MudTh><MudTableSortLabel T="Konto" SortBy="a => a.Name">Kontoname</MudTableSortLabel></MudTh>
             <MudTh>Kontotyp</MudTh>
             <MudTh>IBAN</MudTh>
-            <MudTh Style="text-align: right;">Kontostand</MudTh>
+            <MudTh Style="text-align: right;"><MudTableSortLabel T="Konto" SortBy="a => a.Balance">Kontostand</MudTableSortLabel></MudTh>
             <MudTh>Währung</MudTh>
             <MudTh>Bank</MudTh>
             <MudTh Style="text-align: center;">Aktionen</MudTh>
         </HeaderContent>
         <RowTemplate>
             <MudTd DataLabel="Status">
-                <MudChip T="string" Size="Size.Small" 
+                <MudChip T="string" Size="Size.Small"
                          Color="@(context.IsActive ? Color.Success : Color.Default)"
                          Variant="Variant.Filled">
                     @(context.IsActive ? "Aktiv" : "Inaktiv")
                 </MudChip>
             </MudTd>
             <MudTd DataLabel="Kontoname">
-                <MudText Typo="Typo.body2">
-                    <strong>@context.Name</strong>
-                </MudText>
+                <MudText Typo="Typo.body2"><strong>@context.Name</strong></MudText>
             </MudTd>
             <MudTd DataLabel="Kontotyp">
-                <MudChip T="string" Size="Size.Small" Color="@GetAccountTypeColor(context.Type)">
-                    @GetAccountTypeText(context.Type)
+                <MudChip T="string" Size="Size.Small" Icon="@AccountTypeIcon(context.Type)" Color="@AccountTypeColor(context.Type)">
+                    @AccountTypeText(context.Type)
                 </MudChip>
             </MudTd>
             <MudTd DataLabel="IBAN">
-                <MudText Typo="Typo.body2" Style="font-family: monospace;">@context.IBAN</MudText>
+                <MudText Typo="Typo.body2" Style="font-family: monospace;">@(string.IsNullOrEmpty(context.IBAN) ? "–" : context.IBAN)</MudText>
             </MudTd>
             <MudTd DataLabel="Kontostand" Style="text-align: right;">
-                <MudText Typo="Typo.body2" 
-                         Color="@(context.Balance >= 0 ? Color.Success : Color.Error)">
-                    <strong>@context.Balance.ToString("C", new System.Globalization.CultureInfo("de-DE"))</strong>
+                <MudText Typo="Typo.body2" Color="@(context.Balance >= 0 ? Color.Success : Color.Error)">
+                    <strong>@Money(context.Balance)</strong>
                 </MudText>
             </MudTd>
             <MudTd DataLabel="Währung">@context.Currency</MudTd>
             <MudTd DataLabel="Bank">@context.BankName</MudTd>
-            <MudTd DataLabel="Aktionen" Style="text-align: center;">
-                <MudIconButton Icon="@Icons.Material.Filled.Edit" 
-                               Color="Color.Primary" 
-                               Size="Size.Small"
-                               OnClick="@(() => OpenEditDialog(context))"
-                               Title="Bearbeiten"/>
-                <MudIconButton Icon="@Icons.Material.Filled.Delete" 
-                               Color="Color.Error" 
-                               Size="Size.Small"
-                               OnClick="@(() => DeleteAccount(context))"
-                               Title="Löschen"/>
-                <MudIconButton Icon="@Icons.Material.Filled.Visibility" 
-                               Color="Color.Info" 
+            <MudTd DataLabel="Aktionen" Style="text-align: center; white-space: nowrap;">
+                <span @onclick:stopPropagation="true">
+                <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                               Color="Color.Info"
                                Size="Size.Small"
                                OnClick="@(() => ViewDetails(context))"
-                               Title="Details"/>
+                               title="Details" />
+                @if (Finance.CanEdit)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                   Color="Color.Primary"
+                                   Size="Size.Small"
+                                   Href="@($"konten/{context.Id}/bearbeiten")"
+                                   title="Bearbeiten" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                   Color="Color.Error"
+                                   Size="Size.Small"
+                                   OnClick="@(() => DeleteAccount(context))"
+                                   title="Löschen" />
+                }
+                </span>
             </MudTd>
         </RowTemplate>
         <NoRecordsContent>
@@ -133,82 +126,11 @@
             </MudText>
         </NoRecordsContent>
     </MudTable>
-</MudContainer>
 
-<!-- Create/Edit Dialog -->
-<MudDialog @bind-IsVisible="dialogVisible" Options="dialogOptions">
-    <TitleContent>
-        <MudText Typo="Typo.h6">
-            @(isEditMode ? "Konto bearbeiten" : "Neues Konto erstellen")
-        </MudText>
-    </TitleContent>
-    <DialogContent>
-        <MudForm @ref="form" @bind-IsValid="formValid">
-            <MudGrid>
-                <MudItem xs="12">
-                    <MudTextField @bind-Value="currentAccount.Name" 
-                                  Label="Kontoname" 
-                                  Required="true"
-                                  RequiredError="Kontoname ist erforderlich"
-                                  Variant="Variant.Outlined"/>
-                </MudItem>
-                <MudItem xs="12" md="6">
-                    <MudSelect @bind-Value="currentAccount.Type" 
-                               Label="Kontotyp" 
-                               Required="true"
-                               Variant="Variant.Outlined">
-                        @foreach (AccountType type in Enum.GetValues(typeof(AccountType)))
-                        {
-                            <MudSelectItem Value="@type">@GetAccountTypeText(type)</MudSelectItem>
-                        }
-                    </MudSelect>
-                </MudItem>
-                <MudItem xs="12" md="6">
-                    <MudTextField @bind-Value="currentAccount.Currency" 
-                                  Label="Währung" 
-                                  Required="true"
-                                  Variant="Variant.Outlined"/>
-                </MudItem>
-                <MudItem xs="12">
-                    <MudTextField @bind-Value="currentAccount.IBAN" 
-                                  Label="IBAN" 
-                                  Variant="Variant.Outlined"/>
-                </MudItem>
-                <MudItem xs="12">
-                    <MudTextField @bind-Value="currentAccount.BankName" 
-                                  Label="Bank" 
-                                  Required="true"
-                                  Variant="Variant.Outlined"/>
-                </MudItem>
-                <MudItem xs="12" md="6">
-                    <MudNumericField @bind-Value="currentAccount.Balance" 
-                                     Label="Kontostand" 
-                                     Format="N2"
-                                     Variant="Variant.Outlined"
-                                     Adornment="Adornment.Start"
-                                     AdornmentText="€"/>
-                </MudItem>
-                <MudItem xs="12" md="6">
-                    <MudSwitch T="bool" @bind-Checked="currentAccount.IsActive" 
-                               Label="Konto aktiv" 
-                               Color="Color.Success"/>
-                </MudItem>
-                <MudItem xs="12">
-                    <MudTextField @bind-Value="currentAccount.Description" 
-                                  Label="Beschreibung" 
-                                  Lines="3"
-                                  Variant="Variant.Outlined"/>
-                </MudItem>
-            </MudGrid>
-        </MudForm>
-    </DialogContent>
-    <DialogActions>
-        <MudButton OnClick="CloseDialog" Variant="Variant.Text">Abbrechen</MudButton>
-        <MudButton OnClick="SaveAccount" 
-                   Variant="Variant.Filled" 
-                   Color="Color.Primary"
-                   Disabled="@(!formValid)">
-            Speichern
-        </MudButton>
-    </DialogActions>
-</MudDialog>
+    @if (Finance.Accounts.Any(a => a.Currency != "EUR"))
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Variant="Variant.Text" Class="mt-2">
+            Fremdwährungskonten werden in Summen ohne Umrechnung berücksichtigt.
+        </MudAlert>
+    }
+</MudContainer>

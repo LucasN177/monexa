@@ -1,0 +1,22 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject PreferencesService Preferences
+
+<MudThemeProvider Theme="AppTheme.Theme" IsDarkMode="@Preferences.DarkMode" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudMainContent>
+        @Body
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    protected override void OnInitialized() => Preferences.Changed += Refresh;
+
+    private void Refresh() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Preferences.Changed -= Refresh;
+}
