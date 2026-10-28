@@ -86,15 +86,15 @@ Unter *Einstellungen* lassen sich die Daten jederzeit zurücksetzen.
 2. Inhalt von [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) im SQL-Editor ausführen
    (Tabellen, Row Level Security, Rollen, Einladungen, Realtime). Das Skript ist idempotent und baut ein
    bestehendes älteres MonExA-Schema verlustfrei um (Spalten werden umbenannt, Daten übernommen, Kontostände bleiben erhalten).
-3. URL und **anon/publishable Key** (Settings → API) in `wwwroot/appsettings.json` eintragen:
+3. Für die lokale Entwicklung URL und **anon/publishable Key** (Settings → API) in
+   `wwwroot/appsettings.Development.json` eintragen (Datei ist per `.gitignore` ausgeschlossen):
    ```json
-   { "Supabase": { "Url": "https://<projekt>.supabase.co", "AnonKey": "<anon-key>" } }
+   { "Supabase": { "Url": "https://<projekt>.supabase.co", "AnonKey": "<publishable-key>" } }
    ```
    Niemals den `service_role`/secret Key verwenden – der Schutz erfolgt über RLS.
-4. Unter *Authentication → URL Configuration* die App-URL als Redirect-URL eintragen (für Bestätigungsmails und Magic Links).
-
-Für das GitHub-Pages-Deployment können URL und Key alternativ als Repository-Variablen
-`SUPABASE_URL` und `SUPABASE_ANON_KEY` hinterlegt werden; der Workflow schreibt sie beim Build in die Konfiguration.
+4. Für das GitHub-Pages-Deployment URL und Key als Repository-Secrets `SUPABASE_URL` und `SUPABASE_KEY` hinterlegen;
+   der Workflow schreibt sie beim Build in `appsettings.json`. Ohne Secrets wird im Demo-Modus veröffentlicht.
+5. Unter *Authentication → URL Configuration* die App-URLs als Redirect-URLs eintragen (für Bestätigungsmails und Magic Links).
 
 ---
 

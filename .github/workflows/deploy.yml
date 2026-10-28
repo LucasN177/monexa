@@ -26,15 +26,20 @@ jobs:
     - name: Update base href
       run: sed -i 's/<base href="\/" \/>/<base href="\/monexa\/" \/>/' wwwroot/index.html
 
-    # Optional: Repository-Variablen SUPABASE_URL und SUPABASE_ANON_KEY aktivieren den Cloud-Modus.
-    # Ohne Variablen läuft die veröffentlichte App im Demo-Modus (localStorage).
+    # Repository-Secrets SUPABASE_URL und SUPABASE_KEY (Publishable/anon Key) aktivieren den Cloud-Modus.
+    # Ohne Secrets läuft die veröffentlichte App im Demo-Modus (localStorage).
+    # Hinweis: Der Key ist für den Browser bestimmt und steht danach im veröffentlichten appsettings.json.
     - name: Configure Supabase
-      if: ${{ vars.SUPABASE_URL != '' }}
       env:
-        SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-        SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
       run: |
-        printf '{\n  "Supabase": {\n    "Url": "%s",\n    "AnonKey": "%s"\n  }\n}\n' "$SUPABASE_URL" "$SUPABASE_ANON_KEY" > wwwroot/appsettings.json
+        if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+          echo "::notice::Keine Supabase-Secrets gesetzt – Deployment im Demo-Modus."
+          exit 0
+        fi
+        printf '{\n  "Supabase": {\n    "Url": "%s",\n    "AnonKey": "%s"\n  }\n}\n' "$SUPABASE_URL" "$SUPABASE_KEY" > wwwroot/appsettings.json
+        echo "Supabase-Konfiguration geschrieben."
 
     - name: Publish
       run: dotnet publish -c Release -o release
