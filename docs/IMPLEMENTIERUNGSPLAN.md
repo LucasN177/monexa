@@ -75,10 +75,12 @@ Pages / Layout  ──►  FinanceState (zentraler Zustand + Fachlogik, Change-E
 
 ## 4. Supabase einrichten
 
+Die vollständige Anleitung steht im [README](../README.md#-datenbank). Kurzfassung:
+
 1. Projekt in Supabase anlegen.
-2. SQL aus `supabase/migrations/0001_init.sql` im SQL-Editor ausführen.
-3. In `wwwroot/appsettings.json` `Url` und `AnonKey` (bzw. Publishable Key) eintragen. Der Key ist für Client-Code vorgesehen; Schutz erfolgt über RLS.
-4. Unter *Authentication → URL Configuration* die App-URL (z. B. `https://<user>.github.io/monexa/`) als Redirect-URL eintragen (für Magic-Link/Bestätigungsmail).
+2. Leere Datenbank: `database/setup_all.sql` ausführen. Bestehendes Alt-Schema: `supabase/migrations/0001_init.sql` ausführen (verlustfreier Umbau).
+3. Lokal: URL und Publishable Key in `wwwroot/appsettings.Development.json` (nicht versioniert). Deployment: Repository-Secrets `SUPABASE_URL` und `SUPABASE_KEY`.
+4. Unter *Authentication → URL Configuration* die App-URLs (lokal und z. B. `https://<user>.github.io/monexa/`) als Redirect-URLs eintragen.
 
 ## 5. Bewusst offen / nächste Schritte
 
