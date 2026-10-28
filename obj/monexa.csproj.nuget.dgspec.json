@@ -1,36 +1,30 @@
 {
   "format": 1,
   "restore": {
-    "E:\\Projekte\\WebDev\\monexa\\monexa.csproj": {}
+    "C:\\Projects\\Github Projects\\monexa\\monexa.csproj": {}
   },
   "projects": {
-    "E:\\Projekte\\WebDev\\monexa\\monexa.csproj": {
+    "C:\\Projects\\Github Projects\\monexa\\monexa.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "E:\\Projekte\\WebDev\\monexa\\monexa.csproj",
+        "projectUniqueName": "C:\\Projects\\Github Projects\\monexa\\monexa.csproj",
         "projectName": "monexa",
-        "projectPath": "E:\\Projekte\\WebDev\\monexa\\monexa.csproj",
-        "packagesPath": "C:\\Users\\Lucas\\.nuget\\packages\\",
-        "outputPath": "E:\\Projekte\\WebDev\\monexa\\obj\\",
+        "projectPath": "C:\\Projects\\Github Projects\\monexa\\monexa.csproj",
+        "packagesPath": "C:\\Users\\LucasNagelsmann\\.nuget\\packages\\",
+        "outputPath": "C:\\Projects\\Github Projects\\monexa\\obj\\",
         "projectStyle": "PackageReference",
-        "fallbackFolders": [
-          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
-        ],
         "configFilePaths": [
-          "C:\\Users\\Lucas\\AppData\\Roaming\\NuGet\\NuGet.Config",
-          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
-          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+          "C:\\Users\\LucasNagelsmann\\AppData\\Roaming\\NuGet\\NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net9.0"
         ],
         "sources": {
-          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
-          "C:\\Program Files\\dotnet\\library-packs": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
           "net9.0": {
+            "framework": "net9.0",
             "targetAlias": "net9.0",
             "projectReferences": {}
           }
@@ -43,12 +37,13 @@
         "restoreAuditProperties": {
           "enableAudit": "true",
           "auditLevel": "low",
-          "auditMode": "all"
+          "auditMode": "direct"
         },
-        "SdkAnalysisLevel": "9.0.100"
+        "SdkAnalysisLevel": "10.0.400"
       },
       "frameworks": {
         "net9.0": {
+          "framework": "net9.0",
           "targetAlias": "net9.0",
           "dependencies": {
             "Microsoft.AspNetCore.Components.WebAssembly": {
@@ -63,18 +58,22 @@
             "Microsoft.NET.ILLink.Tasks": {
               "suppressParent": "All",
               "target": "Package",
-              "version": "[9.0.0, )",
+              "version": "[9.0.21, )",
               "autoReferenced": true
             },
             "Microsoft.NET.Sdk.WebAssembly.Pack": {
               "suppressParent": "All",
               "target": "Package",
-              "version": "[9.0.0, )",
+              "version": "[10.0.13, )",
               "autoReferenced": true
             },
             "MudBlazor": {
               "target": "Package",
               "version": "[8.13.0, )"
+            },
+            "Supabase": {
+              "target": "Package",
+              "version": "[8.5.1, )"
             }
           },
           "imports": [
@@ -90,8 +89,20 @@
           "warn": true,
           "downloadDependencies": [
             {
+              "name": "Microsoft.AspNetCore.App.Ref",
+              "version": "[9.0.21, 9.0.21]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Ref",
+              "version": "[9.0.21, 9.0.21]"
+            },
+            {
               "name": "Microsoft.NETCore.App.Runtime.Mono.browser-wasm",
-              "version": "[9.0.0, 9.0.0]"
+              "version": "[9.0.21, 9.0.21]"
+            },
+            {
+              "name": "Microsoft.WindowsDesktop.App.Ref",
+              "version": "[9.0.21, 9.0.21]"
             }
           ],
           "frameworkReferences": {
@@ -99,7 +110,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.100/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.402/PortableRuntimeIdentifierGraph.json"
         }
       },
       "runtimes": {

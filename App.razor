@@ -1,12 +1,17 @@
-﻿<Router AppAssembly="@typeof(App).Assembly">
+<Router AppAssembly="@typeof(App).Assembly">
     <Found Context="routeData">
         <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
         <FocusOnNavigate RouteData="@routeData" Selector="h1" />
     </Found>
     <NotFound>
-        <PageTitle>Not found</PageTitle>
+        <PageTitle>Seite nicht gefunden – MonExA</PageTitle>
         <LayoutView Layout="@typeof(MainLayout)">
-            <p role="alert">Sorry, there's nothing at this address.</p>
+            <MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
+                <EmptyState Icon="@Icons.Material.Filled.ExploreOff" Title="Seite nicht gefunden"
+                            Text="Unter dieser Adresse gibt es nichts – vielleicht ein veralteter Link?">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="">Zum Dashboard</MudButton>
+                </EmptyState>
+            </MudContainer>
         </LayoutView>
     </NotFound>
 </Router>

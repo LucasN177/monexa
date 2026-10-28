@@ -22,11 +22,27 @@ jobs:
       with:
         dotnet-version: 9.0.x
 
+    # Vor dem Publish anpassen, damit die Hashes im Service-Worker-Manifest stimmen.
+    - name: Update base href
+      run: sed -i 's/<base href="\/" \/>/<base href="\/monexa\/" \/>/' wwwroot/index.html
+
+    # Repository-Secrets SUPABASE_URL und SUPABASE_KEY (Publishable/anon Key) aktivieren den Cloud-Modus.
+    # Ohne Secrets läuft die veröffentlichte App im Demo-Modus (localStorage).
+    # Hinweis: Der Key ist für den Browser bestimmt und steht danach im veröffentlichten appsettings.json.
+    - name: Configure Supabase
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      run: |
+        if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+          echo "::notice::Keine Supabase-Secrets gesetzt – Deployment im Demo-Modus."
+          exit 0
+        fi
+        printf '{\n  "Supabase": {\n    "Url": "%s",\n    "AnonKey": "%s"\n  }\n}\n' "$SUPABASE_URL" "$SUPABASE_KEY" > wwwroot/appsettings.json
+        echo "Supabase-Konfiguration geschrieben."
+
     - name: Publish
       run: dotnet publish -c Release -o release
-
-    - name: Update base href
-      run: sed -i 's/<base href="\/" \/>/<base href="\/monexa\/" \/>/' release/wwwroot/index.html
 
     - name: Copy index.html to 404.html
       run: cp release/wwwroot/index.html release/wwwroot/404.html

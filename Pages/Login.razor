@@ -1,0 +1,161 @@
+@page "/login"
+@layout AuthLayout
+@inject AuthService Auth
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Anmelden – MonExA</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraSmall" Class="d-flex flex-column justify-center" Style="min-height: 100vh;">
+    <MudStack AlignItems="AlignItems.Center" Class="mb-6">
+        <MudImage Src="Resources/MonexaIconTransparentWhite.png" Alt="MonExA" Width="88" Height="88" />
+        <MudText Typo="Typo.h4">MonExA</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Primary">Money · Expenses · Analysis</MudText>
+    </MudStack>
+
+    @if (!Auth.IsCloud)
+    {
+        <MudPaper Class="pa-6" Elevation="3">
+            <MudAlert Severity="Severity.Info" Class="mb-4">
+                Es ist kein Supabase-Projekt konfiguriert. Die App läuft im <strong>Demo-Modus</strong>
+                und speichert alle Daten lokal in diesem Browser.
+            </MudAlert>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Href="">Weiter zur App</MudButton>
+        </MudPaper>
+    }
+    else
+    {
+        <MudPaper Class="pa-6" Elevation="3">
+            <MudTabs @bind-ActivePanelIndex="_tab" Elevation="0" Centered="true" Class="mb-2">
+                <MudTabPanel Text="Anmelden" />
+                <MudTabPanel Text="Registrieren" />
+                <MudTabPanel Text="Magic Link" />
+            </MudTabs>
+
+            <MudForm @ref="_form" @bind-IsValid="_valid">
+                <MudStack Spacing="3">
+                    <MudTextField @bind-Value="_email"
+                                  Label="E-Mail"
+                                  InputType="InputType.Email"
+                                  Variant="Variant.Outlined"
+                                  Required="true"
+                                  RequiredError="E-Mail ist erforderlich"
+                                  Validation="@(new Func<string, string?>(ValidateEmail))"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Email"
+                                  Immediate="true" />
+
+                    @if (_tab != 2)
+                    {
+                        <MudTextField @bind-Value="_password"
+                                      Label="Passwort"
+                                      InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                                      Variant="Variant.Outlined"
+                                      Required="true"
+                                      RequiredError="Passwort ist erforderlich"
+                                      Validation="@(new Func<string, string?>(ValidatePassword))"
+                                      Adornment="Adornment.End"
+                                      AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                      OnAdornmentClick="@(() => _showPassword = !_showPassword)"
+                                      Immediate="true"
+                                      OnKeyDown="OnKeyDown" />
+                    }
+
+                    @if (!string.IsNullOrEmpty(_message))
+                    {
+                        <MudAlert Severity="@(_success ? Severity.Success : Severity.Error)" Dense="true">@_message</MudAlert>
+                    }
+
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               FullWidth="true"
+                               Size="Size.Large"
+                               Disabled="@_busy"
+                               OnClick="Submit">
+                        @if (_busy)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        }
+                        @(_tab switch { 1 => "Konto erstellen", 2 => "Link senden", _ => "Anmelden" })
+                    </MudButton>
+
+                    @if (_tab == 0)
+                    {
+                        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="ResetPassword" Disabled="@_busy">
+                            Passwort vergessen?
+                        </MudButton>
+                    }
+                </MudStack>
+            </MudForm>
+        </MudPaper>
+    }
+</MudContainer>
+
+@code {
+    private MudForm? _form;
+    private bool _valid;
+    private bool _busy;
+    private bool _showPassword;
+    private int _tab;
+    private string _email = "";
+    private string _password = "";
+    private string? _message;
+    private bool _success;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (await Auth.TryHandleRedirectAsync(new Uri(Navigation.Uri)) || (Auth.IsCloud && Auth.IsAuthenticated))
+            Navigation.NavigateTo("", replace: true);
+    }
+
+    private static string? ValidateEmail(string value) =>
+        string.IsNullOrWhiteSpace(value) || (value.Contains('@') && value.Contains('.')) ? null : "Ungültige E-Mail-Adresse";
+
+    private string? ValidatePassword(string value) =>
+        _tab == 1 && value.Length < 8 ? "Mindestens 8 Zeichen" : null;
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await Submit();
+    }
+
+    private async Task Submit()
+    {
+        if (_form != null) await _form.Validate();
+        if (_form?.IsValid != true) return;
+
+        _busy = true;
+        _message = null;
+        var redirect = Navigation.BaseUri;
+        var result = _tab switch
+        {
+            1 => await Auth.SignUpAsync(_email.Trim(), _password, redirect),
+            2 => await Auth.SendMagicLinkAsync(_email.Trim(), redirect),
+            _ => await Auth.SignInAsync(_email.Trim(), _password)
+        };
+        _busy = false;
+        _success = result.Success;
+        _message = result.Message;
+
+        if (result.Success && Auth.IsAuthenticated)
+        {
+            Snackbar.Add("Willkommen zurück!", Severity.Success);
+            Navigation.NavigateTo("", replace: true);
+        }
+    }
+
+    private async Task ResetPassword()
+    {
+        if (string.IsNullOrWhiteSpace(_email) || ValidateEmail(_email) != null)
+        {
+            _success = false;
+            _message = "Bitte zuerst eine gültige E-Mail-Adresse eingeben.";
+            return;
+        }
+        _busy = true;
+        var result = await Auth.ResetPasswordAsync(_email.Trim());
+        _busy = false;
+        _success = result.Success;
+        _message = result.Message;
+    }
+}

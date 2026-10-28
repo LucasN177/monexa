@@ -482,3 +482,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Lokale Supabase-Zugangsdaten (Deployment nutzt GitHub-Secrets)
+wwwroot/appsettings.Development.json

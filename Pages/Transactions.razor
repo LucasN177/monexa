@@ -1,205 +1,275 @@
 @page "/transaktionen"
-@using System.ComponentModel.DataAnnotations
-@using monexa.Models.Enums
+@inherits FinancePage
 
-<PageTitle>Transaktionen</PageTitle>
+<PageTitle>Transaktionen – MonExA</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
-    <MudText Typo="Typo.h4" Class="mb-4">Transaktionen</MudText>
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-8">
+    <PageHeader Title="Transaktionen" Subtitle="Alle Buchungen des Projekts">
+        <Actions>
+            <MudMenu Label="Export / Import" StartIcon="@Icons.Material.Filled.ImportExport" Variant="Variant.Outlined" Dense="true">
+                <MudMenuItem Icon="@Icons.Material.Filled.Download" OnClick="ExportCsv">Gefilterte als CSV exportieren</MudMenuItem>
+                @if (Finance.CanEdit)
+                {
+                    <MudMenuItem Icon="@Icons.Material.Filled.Upload" OnClick="@(() => _importOpen = true)">CSV importieren</MudMenuItem>
+                }
+            </MudMenu>
+            @if (Finance.CanEdit)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="transaktionen/neu">
+                    Neue Transaktion
+                </MudButton>
+            }
+        </Actions>
+    </PageHeader>
 
-    <!-- Statistik Cards -->
+    <!-- Statistik Cards (bezogen auf den Filter) -->
     <MudGrid Class="mb-4">
         <MudItem xs="12" sm="6" md="3">
-            <MudCard Elevation="2">
-                <MudCardContent>
-                    <MudText Typo="Typo.body2" Color="Color.Dark">Einnahmen (Monat)</MudText>
-                    <MudText Typo="Typo.h5" Color="Color.Success">
-                        @GetMonthlyIncome().ToString("C", new System.Globalization.CultureInfo("de-DE"))
-                    </MudText>
-                </MudCardContent>
-            </MudCard>
+            <StatCard Title="Einnahmen" Value="@Money(FilteredIncome)" ValueColor="Color.Success" Caption="@PeriodCaption" Icon="@Icons.Material.Filled.TrendingUp" IconColor="Color.Success" />
         </MudItem>
         <MudItem xs="12" sm="6" md="3">
-            <MudCard Elevation="2">
-                <MudCardContent>
-                    <MudText Typo="Typo.body2" Color="Color.Dark">Ausgaben (Monat)</MudText>
-                    <MudText Typo="Typo.h5" Color="Color.Error">
-                        @GetMonthlyExpenses().ToString("C", new System.Globalization.CultureInfo("de-DE"))
-                    </MudText>
-                </MudCardContent>
-            </MudCard>
+            <StatCard Title="Ausgaben" Value="@Money(FilteredExpenses)" ValueColor="Color.Error" Caption="@PeriodCaption" Icon="@Icons.Material.Filled.TrendingDown" IconColor="Color.Error" />
         </MudItem>
         <MudItem xs="12" sm="6" md="3">
-            <MudCard Elevation="2">
-                <MudCardContent>
-                    <MudText Typo="Typo.body2" Color="Color.Dark">Saldo (Monat)</MudText>
-                    <MudText Typo="Typo.h5" Color="@(GetMonthlySaldo() >= 0 ? Color.Success : Color.Error)">
-                        @GetMonthlySaldo().ToString("C", new System.Globalization.CultureInfo("de-DE"))
-                    </MudText>
-                </MudCardContent>
-            </MudCard>
+            <StatCard Title="Saldo" Value="@Money(FilteredIncome - FilteredExpenses)"
+                      ValueColor="@(FilteredIncome - FilteredExpenses >= 0 ? Color.Success : Color.Error)" Caption="@PeriodCaption" Icon="@Icons.Material.Filled.Balance" />
         </MudItem>
         <MudItem xs="12" sm="6" md="3">
-            <MudCard Elevation="2">
-                <MudCardContent>
-                    <MudText Typo="Typo.body2" Color="Color.Dark">Transaktionen</MudText>
-                    <MudText Typo="Typo.h5">@GetFilteredTransactions().Count()</MudText>
-                </MudCardContent>
-            </MudCard>
+            <StatCard Title="Transaktionen" Value="@filtered.Count.ToString()" Caption="@($"von {Finance.Transactions.Count} insgesamt")" Icon="@Icons.Material.Filled.Receipt" IconColor="Color.Info" />
         </MudItem>
     </MudGrid>
 
-    <!-- Filter und Action Bar -->
-    <MudPaper Class="pa-4 mb-4" Elevation="1">
+    <!-- Filter -->
+    <MudPaper Class="pa-4 mb-4" Elevation="0" Outlined="true">
         <MudGrid Spacing="2">
             <MudItem xs="12" md="3">
-                <MudTextField @bind-Value="searchString" 
-                              Placeholder="Suchen..." 
-                              Adornment="Adornment.Start" 
-                              AdornmentIcon="@Icons.Material.Filled.Search" 
+                <MudTextField T="string" Value="searchString" ValueChanged="@(v => { searchString = v; ApplyFilter(); })"
+                              Placeholder="Suchen..."
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
                               Immediate="true"
+                              DebounceInterval="250"
+                              Clearable="true"
                               Variant="Variant.Outlined"
-                              Margin="Margin.Dense"/>
+                              Margin="Margin.Dense" />
             </MudItem>
             <MudItem xs="12" sm="6" md="2">
-                <MudSelect T="int?" @bind-Value="selectedAccount" 
-                           Label="Konto" 
-                           Variant="Variant.Outlined"
-                           Margin="Margin.Dense"
-                           Clearable="true">
-                    @foreach (var account in accounts)
+                <MudSelect T="Guid?" Value="selectedAccount" ValueChanged="@(v => { selectedAccount = v; ApplyFilter(); })"
+                           Label="Konto" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                    @foreach (var account in Finance.Accounts)
                     {
-                        <MudSelectItem T="int?" Value="@account.Id">@account.Name</MudSelectItem>
+                        <MudSelectItem T="Guid?" Value="@account.Id">@account.Name</MudSelectItem>
                     }
                 </MudSelect>
             </MudItem>
             <MudItem xs="12" sm="6" md="2">
-                <MudSelect T="int?" @bind-Value="selectedCategory" 
-                           Label="Kategorie" 
-                           Variant="Variant.Outlined"
-                           Margin="Margin.Dense"
-                           Clearable="true">
-                    @foreach (TransactionCategory category in Enum.GetValues(typeof(TransactionCategory)))
+                <MudSelect T="Guid?" Value="selectedCategory" ValueChanged="@(v => { selectedCategory = v; ApplyFilter(); })"
+                           Label="Kategorie" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                    <MudSelectItem T="Guid?" Value="@Guid.Empty">Ohne Kategorie</MudSelectItem>
+                    @foreach (var category in Finance.Categories)
                     {
-                        <MudSelectItem T="int?" Value="@((int)category)">@GetCategoryText(category)</MudSelectItem>
+                        <MudSelectItem T="Guid?" Value="@category.Id">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icon(category.Icon)" Size="Size.Small" Color="@ParseColor(category.Color)" />
+                                <MudText>@category.Name</MudText>
+                            </MudStack>
+                        </MudSelectItem>
                     }
                 </MudSelect>
             </MudItem>
             <MudItem xs="12" sm="6" md="2">
-                <MudSelect T="TransactionType?" @bind-Value="selectedType" 
-                           Label="Typ" 
-                           Variant="Variant.Outlined"
-                           Margin="Margin.Dense"
-                           Clearable="true">
-                    <MudSelectItem T="TransactionType?" Value="@((TransactionType?)TransactionType.Einnahme)">Einnahme</MudSelectItem>
-                    <MudSelectItem T="TransactionType?" Value="@((TransactionType?)TransactionType.Ausgabe)">Ausgabe</MudSelectItem>
-                    <MudSelectItem T="TransactionType?" Value="@((TransactionType?)TransactionType.Umbuchung)">Umbuchung</MudSelectItem>
+                <MudSelect T="TransactionType?" Value="selectedType" ValueChanged="@(v => { selectedType = v; ApplyFilter(); })"
+                           Label="Typ" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                    @foreach (var type in Enum.GetValues<TransactionType>())
+                    {
+                        <MudSelectItem T="TransactionType?" Value="@type">@type</MudSelectItem>
+                    }
                 </MudSelect>
             </MudItem>
             <MudItem xs="12" sm="6" md="3">
-                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Style="height: 100%;">
-                    <MudButton Variant="Variant.Outlined" 
-                               Color="Color.Default"
-                               StartIcon="@Icons.Material.Filled.FilterAltOff"
-                               OnClick="ClearFilters"
-                               FullWidth="true">
+                <MudDateRangePicker DateRange="dateRange" DateRangeChanged="@(r => { dateRange = r; ApplyFilter(); })"
+                                    Label="Zeitraum" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true"
+                                    DateFormat="dd.MM.yyyy" FirstDayOfWeek="DayOfWeek.Monday" Culture="@De" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
+                    <MudText Typo="Typo.caption" Class="mr-1">Schnellauswahl:</MudText>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => SetQuickRange("month"))">Dieser Monat</MudChip>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => SetQuickRange("lastmonth"))">Letzter Monat</MudChip>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => SetQuickRange("90"))">Letzte 90 Tage</MudChip>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => SetQuickRange("year"))">Dieses Jahr</MudChip>
+                    <MudSpacer />
+                    <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.FilterAltOff" OnClick="ClearFilters">
                         Filter zurücksetzen
-                    </MudButton>
-                    <MudButton Variant="Variant.Filled" 
-                               Color="Color.Primary" 
-                               StartIcon="@Icons.Material.Filled.Add"
-                               Href="transaktionen/neu"
-                               FullWidth="true">
-                        Neue Transaktion
                     </MudButton>
                 </MudStack>
             </MudItem>
         </MudGrid>
     </MudPaper>
 
-    <!-- Transaktionen Timeline/Liste -->
-    <MudPaper Elevation="2">
-        @if (!GetFilteredTransactions().Any())
+    @if (selected.Count > 0 && Finance.CanEdit)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-3" Dense="true" ContentAlignment="HorizontalAlignment.Left">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudText Typo="Typo.body2">@selected.Count ausgewählt</MudText>
+                <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteSelected">Löschen</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => selected.Clear())">Auswahl aufheben</MudButton>
+            </MudStack>
+        </MudAlert>
+    }
+
+    <!-- Transaktionen Liste, gruppiert nach Monat -->
+    @if (!filtered.Any())
+    {
+        <EmptyState Icon="@Icons.Material.Filled.Receipt" Title="Keine Transaktionen gefunden" Text="Ändere die Filter oder erstelle eine neue Transaktion." />
+    }
+    else
+    {
+        @foreach (var group in GetGroupedTransactions())
         {
-            <div class="pa-8" style="text-align: center;">
-                <MudIcon Icon="@Icons.Material.Filled.Receipt" Size="Size.Large" Color="Color.Default" Class="mb-2"/>
-                <MudText Typo="Typo.h6">Keine Transaktionen gefunden</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Default">
-                    Ändern Sie die Filter oder erstellen Sie eine neue Transaktion
-                </MudText>
-            </div>
-        }
-        else
-        {
-            @foreach (var group in GetGroupedTransactions())
-            {
-                <MudPaper Class="pa-4" Elevation="0">
-                    <MudText Typo="Typo.h6" Class="mb-3">@group.Key</MudText>
-                    <MudDivider Class="mb-3"/>
-                    
-                    @foreach (var transaction in group)
-                    {
-                        <MudCard Class="mb-2" Elevation="0" Outlined="true">
-                            <MudCardContent Class="py-3">
-                                <MudGrid>
-                                    <MudItem xs="12" sm="6" md="3">
-                                        <MudStack Spacing="1">
-                                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                                                <MudIcon Icon="@GetCategoryIcon(transaction.Category)" 
-                                                         Size="Size.Small" 
-                                                         Color="@GetTransactionTypeColor(transaction.Type)"/>
-                                                <MudText Typo="Typo.body1"><strong>@transaction.Description</strong></MudText>
-                                            </MudStack>
-                                            <MudText Typo="Typo.body2" Color="Color.Default">
-                                                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@GetCategoryColor(transaction.Category)">
-                                                    @GetCategoryText(transaction.Category)
-                                                </MudChip>
-                                            </MudText>
+            <MudPaper Class="pa-4 mb-3" Elevation="0" Outlined="true">
+                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
+                    <MudText Typo="Typo.h6">@group.Label</MudText>
+                    <MudStack Row="true" Spacing="3">
+                        <MudText Typo="Typo.body2" Color="Color.Success">+ @Money(group.Income)</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Error">- @Money(group.Expenses)</MudText>
+                    </MudStack>
+                </MudStack>
+                <MudDivider Class="mb-2" />
+
+                @foreach (var transaction in group.Items)
+                {
+                    var category = Finance.GetCategory(transaction.CategoryId);
+                    <MudPaper Class="px-3 py-2 mb-1" Elevation="0" Style="@(selected.Contains(transaction.Id) ? "background: var(--mud-palette-action-default-hover);" : "")">
+                        <MudGrid Spacing="1" Style="align-items: center;">
+                            <MudItem xs="12" sm="6" md="4">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                    @if (Finance.CanEdit)
+                                    {
+                                        <MudCheckBox T="bool" Value="@selected.Contains(transaction.Id)" ValueChanged="@(v => ToggleSelected(transaction.Id, v))" Size="Size.Small" Dense="true" />
+                                    }
+                                    <MudAvatar Size="Size.Small" Color="@(category != null ? ParseColor(category.Color) : TransactionTypeColor(transaction.Type))" Variant="Variant.Outlined">
+                                        <MudIcon Icon="@(category != null ? Icon(category.Icon) : TransactionTypeIcon(transaction.Type))" Size="Size.Small" />
+                                    </MudAvatar>
+                                    <MudStack Spacing="0">
+                                        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                            <MudText Typo="Typo.body1"><strong>@transaction.Description</strong></MudText>
+                                            @if (transaction.RecurringId != null)
+                                            {
+                                                <MudTooltip Text="Aus Dauerauftrag"><MudIcon Icon="@Icons.Material.Filled.EventRepeat" Size="Size.Small" Color="Color.Info" /></MudTooltip>
+                                            }
                                         </MudStack>
-                                    </MudItem>
-                                    <MudItem xs="6" sm="3" md="2">
-                                        <MudText Typo="Typo.caption" Color="Color.Default">Konto</MudText>
-                                        <MudText Typo="Typo.body2">@GetAccountName(transaction.AccountId)</MudText>
-                                    </MudItem>
-                                    <MudItem xs="6" sm="3" md="2">
-                                        <MudText Typo="Typo.caption" Color="Color.Default">Datum</MudText>
-                                        <MudText Typo="Typo.body2">@transaction.Date.ToString("dd.MM.yyyy")</MudText>
-                                    </MudItem>
-                                    <MudItem xs="6" sm="6" md="2">
-                                        <MudText Typo="Typo.caption" Color="Color.Default">Betrag</MudText>
-                                        <MudText Typo="Typo.h6" Color="@GetTransactionTypeColor(transaction.Type)">
-                                            @GetFormattedAmount(transaction)
+                                        <MudText Typo="Typo.caption">
+                                            @(transaction.Type == TransactionType.Umbuchung ? "Umbuchung" : category?.Name ?? "Ohne Kategorie")
                                         </MudText>
-                                    </MudItem>
-                                    <MudItem xs="6" sm="6" md="3" Style="text-align: right;">
-                                        <MudStack Row="true" Justify="Justify.FlexEnd" AlignItems="AlignItems.Center">
-                                            <MudChip T="string" Size="Size.Small" 
-                                                     Color="@GetTransactionTypeColor(transaction.Type)"
-                                                     Variant="Variant.Filled">
-                                                @transaction.Type.ToString()
-                                            </MudChip>
-                                            <MudIconButton Icon="@Icons.Material.Filled.Edit" 
-                                                           Color="Color.Primary" 
-                                                           Size="Size.Small"
-                                                           Href="@($"/transaktionen/{transaction.Id}/bearbeiten")"/>
-                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" 
-                                                           Color="Color.Error" 
-                                                           Size="Size.Small"
-                                                           OnClick="@(() => DeleteTransaction(transaction))"/>
-                                        </MudStack>
-                                    </MudItem>
-                                </MudGrid>
-                                @if (!string.IsNullOrWhiteSpace(transaction.Notes))
+                                    </MudStack>
+                                </MudStack>
+                            </MudItem>
+                            <MudItem xs="6" sm="3" md="3">
+                                <MudText Typo="Typo.caption">Konto</MudText>
+                                <MudText Typo="Typo.body2">
+                                    @Finance.AccountName(transaction.AccountId)
+                                    @if (transaction.Type == TransactionType.Umbuchung)
+                                    {
+                                        <span> → @Finance.AccountName(transaction.ToAccountId)</span>
+                                    }
+                                </MudText>
+                            </MudItem>
+                            <MudItem xs="6" sm="3" md="2">
+                                <MudText Typo="Typo.caption">Datum</MudText>
+                                <MudText Typo="Typo.body2">@Date(transaction.Date)</MudText>
+                            </MudItem>
+                            <MudItem xs="6" sm="6" md="2">
+                                <MudText Typo="Typo.h6" Color="@TransactionTypeColor(transaction.Type)">
+                                    @GetFormattedAmount(transaction)
+                                </MudText>
+                            </MudItem>
+                            <MudItem xs="6" sm="6" md="1" Style="text-align: right;">
+                                @if (Finance.CanEdit)
                                 {
-                                    <MudText Typo="Typo.body2" Color="Color.Default" Class="mt-2">
-                                        <em>@transaction.Notes</em>
-                                    </MudText>
+                                    <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                                        <MudMenuItem Icon="@Icons.Material.Filled.Edit" Href="@($"transaktionen/{transaction.Id}/bearbeiten")">Bearbeiten</MudMenuItem>
+                                        <MudMenuItem Icon="@Icons.Material.Filled.ContentCopy" Href="@($"transaktionen/neu?vorlage={transaction.Id}")">Duplizieren</MudMenuItem>
+                                        <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" OnClick="@(() => DeleteTransaction(transaction))">Löschen</MudMenuItem>
+                                    </MudMenu>
                                 }
-                            </MudCardContent>
-                        </MudCard>
-                    }
-                </MudPaper>
-            }
+                            </MudItem>
+                        </MudGrid>
+                        @if (!string.IsNullOrWhiteSpace(transaction.Notes))
+                        {
+                            <MudText Typo="Typo.body2" Class="mt-1 ml-12"><em>@transaction.Notes</em></MudText>
+                        }
+                    </MudPaper>
+                }
+            </MudPaper>
         }
-    </MudPaper>
+
+        @if (filtered.Count > visibleCount)
+        {
+            <MudStack AlignItems="AlignItems.Center">
+                <MudButton Variant="Variant.Outlined" OnClick="@(() => visibleCount += 100)">
+                    Weitere laden (@(filtered.Count - visibleCount) übrig)
+                </MudButton>
+            </MudStack>
+        }
+    }
 </MudContainer>
+
+<!-- CSV-Import -->
+<MudDialog @bind-Visible="_importOpen" Options="@(new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true })">
+    <TitleContent>
+        <MudText Typo="Typo.h6"><MudIcon Icon="@Icons.Material.Filled.Upload" Class="mr-2 mb-1" />CSV importieren</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.body2">
+                Erwartet werden die Spalten <code>Datum;Beschreibung;Typ;Betrag;Konto;Zielkonto;Kategorie;Notizen</code>
+                (wie beim Export). Pflicht sind nur Datum und Betrag – negative Beträge werden als Ausgabe erkannt.
+            </MudText>
+            <MudSelect T="Guid" @bind-Value="_importAccount" Label="Konto für Zeilen ohne bekanntes Konto" Variant="Variant.Outlined">
+                @foreach (var account in Finance.Accounts.Where(a => a.IsActive))
+                {
+                    <MudSelectItem Value="@account.Id">@account.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudFileUpload T="IBrowserFile" FilesChanged="OnImportFile" Accept=".csv,text/csv">
+                <ActivatorContent>
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AttachFile">Datei auswählen</MudButton>
+                </ActivatorContent>
+            </MudFileUpload>
+            @if (_importResult != null)
+            {
+                <MudAlert Severity="@(_importResult.Transactions.Any() ? Severity.Success : Severity.Warning)" Dense="true">
+                    @_importResult.Transactions.Count Buchungen erkannt@(_importResult.Errors.Any() ? $", {_importResult.Errors.Count} Zeilen übersprungen" : "").
+                </MudAlert>
+                @foreach (var error in _importResult.Errors.Take(5))
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Error">@error</MudText>
+                }
+                @if (_importResult.Transactions.Any())
+                {
+                    <MudSimpleTable Dense="true" Style="max-height: 260px; overflow: auto;">
+                        <thead><tr><th>Datum</th><th>Beschreibung</th><th>Kategorie</th><th style="text-align:right">Betrag</th></tr></thead>
+                        <tbody>
+                            @foreach (var t in _importResult.Transactions.Take(50))
+                            {
+                                <tr>
+                                    <td>@Date(t.Date)</td>
+                                    <td>@t.Description</td>
+                                    <td>@Finance.CategoryName(t.CategoryId)</td>
+                                    <td style="text-align:right">@GetFormattedAmount(t)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="CloseImport">Abbrechen</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_importResult?.Transactions.Any() != true)" OnClick="ConfirmImport">
+            Importieren
+        </MudButton>
+    </DialogActions>
+</MudDialog>

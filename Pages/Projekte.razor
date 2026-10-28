@@ -1,0 +1,225 @@
+@page "/projekte"
+@inherits FinancePage
+@inject AuthService Auth
+
+<PageTitle>Projekte & Mitglieder – MonExA</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-8">
+    <PageHeader Title="Projekte & Mitglieder" Icon="@Icons.Material.Filled.Groups" Subtitle="Finanzen getrennt nach Projekten verwalten und gemeinsam bearbeiten">
+        <Actions>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CreateNewFolder" OnClick="CreateProject">Neues Projekt</MudButton>
+        </Actions>
+    </PageHeader>
+
+    <MudGrid>
+        @* ── Projektliste ── *@
+        <MudItem xs="12" md="5">
+            <MudPaper Elevation="0" Outlined="true">
+                <MudList T="Guid" SelectedValue="@(Finance.CurrentProject?.Id ?? Guid.Empty)" SelectedValueChanged="SelectProject" Color="Color.Primary">
+                    <MudListSubheader>Deine Projekte</MudListSubheader>
+                    @foreach (var project in Finance.Projects)
+                    {
+                        <MudListItem T="Guid" Value="@project.Id" Icon="@ProjectIcon(project.Icon)">
+                            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                <MudText>@project.Name</MudText>
+                                @if (project.Id == Finance.CurrentProject?.Id)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Primary">aktiv</MudChip>
+                                }
+                            </MudStack>
+                        </MudListItem>
+                    }
+                </MudList>
+            </MudPaper>
+        </MudItem>
+
+        @* ── Details des aktuellen Projekts ── *@
+        <MudItem xs="12" md="7">
+            @if (Finance.CurrentProject is { } current)
+            {
+                <MudPaper Elevation="0" Outlined="true" Class="pa-4 mb-4">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                            <MudAvatar Color="Color.Primary"><MudIcon Icon="@ProjectIcon(current.Icon)" /></MudAvatar>
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.h6">@current.Name</MudText>
+                                <MudText Typo="Typo.caption">Angelegt am @Date(current.CreatedAt.ToLocalTime()) · deine Rolle: @RoleText(Finance.CurrentRole)</MudText>
+                            </MudStack>
+                        </MudStack>
+                        @if (Finance.IsAdmin)
+                        {
+                            <MudStack Row="true" Spacing="1">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="@(() => RenameProject(current))" title="Bearbeiten" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => DeleteProject(current))"
+                                               Disabled="@(Finance.Projects.Count <= 1)" title="Löschen" />
+                            </MudStack>
+                        }
+                    </MudStack>
+                    <MudGrid Class="mt-2">
+                        <MudItem xs="4"><MudText Typo="Typo.caption">Konten</MudText><MudText>@Finance.Accounts.Count</MudText></MudItem>
+                        <MudItem xs="4"><MudText Typo="Typo.caption">Buchungen</MudText><MudText>@Finance.Transactions.Count</MudText></MudItem>
+                        <MudItem xs="4"><MudText Typo="Typo.caption">Vermögen</MudText><MudText>@Money(Finance.NetWorth)</MudText></MudItem>
+                    </MudGrid>
+                </MudPaper>
+
+                <MudPaper Elevation="0" Outlined="true" Class="pa-4">
+                    <MudText Typo="Typo.h6" Class="mb-2">Mitglieder</MudText>
+                    @if (!Auth.IsCloud)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true">
+                            Mitglieder und Einladungen sind nur mit Supabase-Anbindung verfügbar. Im Demo-Modus bist du alleiniger Admin.
+                        </MudAlert>
+                    }
+                    else
+                    {
+                        <MudList T="string" Dense="true">
+                            @if (current.OwnerId != null)
+                            {
+                                <MudListItem T="string" Icon="@Icons.Material.Filled.Star" IconColor="Color.Warning">
+                                    <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                        <MudText>@(current.OwnerId == Auth.UserId ? $"{Auth.Email} (du)" : "Eigentümer")</MudText>
+                                        <MudChip T="string" Size="Size.Small">Eigentümer</MudChip>
+                                    </MudStack>
+                                </MudListItem>
+                            }
+                            @foreach (var member in Finance.Members.Where(m => m.UserId == null || m.UserId != current.OwnerId))
+                            {
+                                <MudListItem T="string" Icon="@(member.IsPending ? Icons.Material.Filled.MailOutline : Icons.Material.Filled.Person)">
+                                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                        <MudStack Spacing="0">
+                                            <MudText Typo="Typo.body2">@member.Email @(member.UserId == Auth.UserId ? "(du)" : "")</MudText>
+                                            @if (member.IsPending)
+                                            {
+                                                <MudText Typo="Typo.caption" Color="Color.Warning">Einladung ausstehend – wird bei der nächsten Anmeldung angenommen</MudText>
+                                            }
+                                        </MudStack>
+                                        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                            @if (Finance.IsAdmin && member.UserId != Auth.UserId)
+                                            {
+                                                <MudSelect T="ProjectRole" Value="member.Role" ValueChanged="@(r => ChangeRole(member, r))" Dense="true" Margin="Margin.Dense" Style="min-width: 130px;">
+                                                    @foreach (var role in Enum.GetValues<ProjectRole>())
+                                                    {
+                                                        <MudSelectItem Value="@role">@RoleText(role)</MudSelectItem>
+                                                    }
+                                                </MudSelect>
+                                                <MudIconButton Icon="@Icons.Material.Filled.PersonRemove" Color="Color.Error" Size="Size.Small" OnClick="@(() => RemoveMember(member))" />
+                                            }
+                                            else
+                                            {
+                                                <MudChip T="string" Size="Size.Small">@RoleText(member.Role)</MudChip>
+                                            }
+                                        </MudStack>
+                                    </MudStack>
+                                </MudListItem>
+                            }
+                        </MudList>
+
+                        @if (Finance.IsAdmin)
+                        {
+                            <MudDivider Class="my-3" />
+                            <MudText Typo="Typo.subtitle2" Class="mb-2">Person einladen</MudText>
+                            <MudForm @ref="_inviteForm" @bind-IsValid="_inviteValid">
+                                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Start" Wrap="Wrap.Wrap">
+                                    <MudTextField @bind-Value="_inviteEmail" Label="E-Mail" Variant="Variant.Outlined" Margin="Margin.Dense" InputType="InputType.Email"
+                                                  Required="true" RequiredError="E-Mail erforderlich" Immediate="true"
+                                                  Validation="@(new Func<string, string?>(e => e.Contains('@') ? null : "Ungültige E-Mail"))" Class="flex-grow-1" />
+                                    <MudSelect T="ProjectRole" @bind-Value="_inviteRole" Label="Rolle" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 140px;">
+                                        @foreach (var role in Enum.GetValues<ProjectRole>())
+                                        {
+                                            <MudSelectItem Value="@role">@RoleText(role)</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Send" OnClick="Invite" Class="mt-1">
+                                        Einladen
+                                    </MudButton>
+                                </MudStack>
+                            </MudForm>
+                            <MudText Typo="Typo.caption">
+                                <strong>Leser</strong> sehen alle Daten, <strong>Bearbeiter</strong> dürfen Buchungen, Konten &amp; Co. ändern,
+                                <strong>Admins</strong> zusätzlich Mitglieder verwalten und das Projekt löschen.
+                                Die eingeladene Person registriert sich mit dieser E-Mail-Adresse und erhält danach automatisch Zugriff.
+                            </MudText>
+                        }
+                    }
+                </MudPaper>
+            }
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
+    private MudForm? _inviteForm;
+    private bool _inviteValid;
+    private string _inviteEmail = "";
+    private ProjectRole _inviteRole = ProjectRole.Bearbeiter;
+
+    private async Task SelectProject(Guid id)
+    {
+        if (id == Guid.Empty || id == Finance.CurrentProject?.Id) return;
+        await Finance.SelectProjectAsync(id);
+    }
+
+    private async Task CreateProject()
+    {
+        var dialog = await DialogService.ShowAsync<ProjectDialog>("Neues Projekt", new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: ValueTuple<string, string> data })
+        {
+            var project = await Finance.CreateProjectAsync(data.Item1, data.Item2);
+            if (project != null) Snackbar.Add($"Projekt „{project.Name}“ wurde angelegt.", Severity.Success);
+        }
+    }
+
+    private async Task RenameProject(Project project)
+    {
+        var parameters = new DialogParameters<ProjectDialog>
+        {
+            { d => d.Name, project.Name },
+            { d => d.Icon, project.Icon },
+            { d => d.IsEdit, true }
+        };
+        var dialog = await DialogService.ShowAsync<ProjectDialog>("Projekt bearbeiten", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: ValueTuple<string, string> data })
+        {
+            project.Name = data.Item1;
+            project.Icon = data.Item2;
+            if (await Finance.UpdateProjectAsync(project)) Snackbar.Add("Projekt gespeichert.", Severity.Success);
+        }
+    }
+
+    private async Task DeleteProject(Project project)
+    {
+        if (!await ConfirmAsync("Projekt löschen",
+                $"Soll das Projekt <strong>{project.Name}</strong> mit allen Konten, Buchungen, Budgets und Sparzielen " +
+                "<strong>endgültig</strong> gelöscht werden? Exportiere vorher ggf. ein Backup unter Einstellungen."))
+            return;
+        if (await Finance.DeleteProjectAsync(project.Id))
+            Snackbar.Add($"Projekt „{project.Name}“ wurde gelöscht.", Severity.Success);
+    }
+
+    private async Task Invite()
+    {
+        if (_inviteForm != null) await _inviteForm.Validate();
+        if (_inviteForm?.IsValid != true) return;
+        if (await Finance.InviteMemberAsync(_inviteEmail, _inviteRole))
+        {
+            Snackbar.Add($"{_inviteEmail} wurde eingeladen.", Severity.Success);
+            _inviteEmail = "";
+        }
+    }
+
+    private async Task ChangeRole(ProjectMember member, ProjectRole role)
+    {
+        if (await Finance.UpdateMemberRoleAsync(member, role))
+            Snackbar.Add($"Rolle von {member.Email} geändert.", Severity.Success);
+    }
+
+    private async Task RemoveMember(ProjectMember member)
+    {
+        if (!await ConfirmAsync("Mitglied entfernen", $"Soll <strong>{member.Email}</strong> keinen Zugriff mehr auf dieses Projekt haben?", "Entfernen"))
+            return;
+        if (await Finance.RemoveMemberAsync(member.Id))
+            Snackbar.Add($"{member.Email} wurde entfernt.", Severity.Success);
+    }
+}

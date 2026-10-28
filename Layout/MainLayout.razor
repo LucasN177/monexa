@@ -1,180 +1,254 @@
-﻿@using monexa.Models
-@inherits LayoutComponentBase
+﻿@inherits LayoutComponentBase
+@implements IDisposable
+@inject FinanceState Finance
+@inject AuthService Auth
+@inject PreferencesService Preferences
+@inject NavigationManager Navigation
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject IServiceProvider Services
 
-@* Required *@
-<MudThemeProvider />
+<MudThemeProvider Theme="AppTheme.Theme" IsDarkMode="@Preferences.DarkMode" />
 <MudPopoverProvider />
-
-@* Needed for dialogs *@
-<MudDialogProvider />
-
-@* Needed for snackbars *@
-<MudSnackbarProvider />
-
-
-<MudThemeProvider Theme="_theme" @bind-IsDarkMode="@_isDarkMode" />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
 <MudLayout>
     <MudAppBar Elevation="1" Dense="true">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@ToggleDrawer" />
-        <MudText Typo="Typo.h4" Class="ml-3">Monexa</MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@(() => _drawerOpen = !_drawerOpen)" aria-label="Menü" />
+        <MudImage Src="Resources/MonexaIconTransparentWhite.png" Alt="" Width="28" Height="28" Class="ml-2" />
+        <MudText Typo="Typo.h5" Class="ml-2 d-none d-sm-flex">MonExA</MudText>
         <MudSpacer />
-        
-        <MudMenu Icon="@Icons.Material.Filled.Folder" Color="Color.Inherit" Dense="true" AnchorOrigin="Origin.BottomCenter">
-            <MudText Typo="Typo.subtitle2" Class="px-4 py-2">Projekt wählen</MudText>
-            <MudDivider />
-            <MudMenuItem Icon="@Icons.Material.Filled.Home">Privat</MudMenuItem>
-            <MudMenuItem Icon="@Icons.Material.Filled.Business">Geschäftlich</MudMenuItem>
-            <MudMenuItem Icon="@Icons.Material.Filled.Savings">Investments</MudMenuItem>
-            <MudDivider />
-            <MudMenuItem Icon="@Icons.Material.Filled.Add">Neues Projekt</MudMenuItem>
-        </MudMenu>
-        
-        <MudTooltip Text="@(_isDarkMode ? "Light Mode" : "Dark Mode")">
-            <MudIconButton Icon="@(_isDarkMode ? @Icons.Material.Filled.LightMode : @Icons.Material.Filled.DarkMode)" 
-                           Color="Color.Inherit" 
-                           OnClick="@ToggleDarkMode" />
+
+        @if (Finance.IsLoaded)
+        {
+            <MudMenu AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter" Dense="true">
+                <ActivatorContent>
+                    <MudButton Color="Color.Inherit" StartIcon="@ProjectIcon(Finance.CurrentProject?.Icon)" EndIcon="@Icons.Material.Filled.ArrowDropDown"
+                               Style="text-transform: none;">
+                        <span class="d-none d-sm-inline">@Finance.CurrentProject?.Name</span>
+                    </MudButton>
+                </ActivatorContent>
+                <ChildContent>
+                    <MudText Typo="Typo.subtitle2" Class="px-4 py-2">Projekt wählen</MudText>
+                    <MudDivider />
+                    @foreach (var project in Finance.Projects)
+                    {
+                        var p = project;
+                        <MudMenuItem Icon="@ProjectIcon(p.Icon)" OnClick="@(() => SelectProject(p))">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudText Typo="Typo.body2">@p.Name</MudText>
+                                @if (p.Id == Finance.CurrentProject?.Id)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" Color="Color.Success" />
+                                }
+                            </MudStack>
+                        </MudMenuItem>
+                    }
+                    <MudDivider />
+                    <MudMenuItem Icon="@Icons.Material.Filled.Add" OnClick="CreateNewProject">Neues Projekt</MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Filled.Settings" Href="projekte">Projekte verwalten</MudMenuItem>
+                </ChildContent>
+            </MudMenu>
+        }
+
+        <MudTooltip Text="@(Preferences.DarkMode ? "Heller Modus" : "Dunkler Modus")">
+            <MudIconButton Icon="@(Preferences.DarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                           Color="Color.Inherit"
+                           OnClick="@(() => Preferences.DarkMode = !Preferences.DarkMode)" />
         </MudTooltip>
-        
-        <MudMenu Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit" Dense="true">
-            <MudMenuItem Icon="@Icons.Material.Filled.Person">Profil</MudMenuItem>
-            <MudMenuItem Icon="@Icons.Material.Filled.Settings">Einstellungen</MudMenuItem>
+
+        <MudMenu Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit" Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+            <MudStack Spacing="0" Class="px-4 py-2">
+                <MudText Typo="Typo.subtitle2">@Auth.DisplayName</MudText>
+                <MudText Typo="Typo.caption">@(Auth.IsCloud ? Auth.Email : "Demo-Modus (lokal)")</MudText>
+            </MudStack>
             <MudDivider />
-            <MudMenuItem Icon="@Icons.Material.Filled.Logout">Abmelden</MudMenuItem>
+            <MudMenuItem Icon="@Icons.Material.Filled.Person" Href="einstellungen">Profil</MudMenuItem>
+            <MudMenuItem Icon="@Icons.Material.Filled.Settings" Href="einstellungen">Einstellungen</MudMenuItem>
+            @if (Auth.IsCloud)
+            {
+                <MudDivider />
+                <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="Logout">Abmelden</MudMenuItem>
+            }
         </MudMenu>
     </MudAppBar>
-    
-    <MudDrawer @bind-Open="_drawerOpen" Elevation="2" ClipMode="DrawerClipMode.Always">
+
+    <MudDrawer @bind-Open="_drawerOpen" Elevation="2" ClipMode="DrawerClipMode.Always" Variant="@DrawerVariant.Responsive">
         <MudDrawerHeader>
             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                <MudIcon Icon="@Icons.Material.Filled.AccountBalance" Color="Color.Primary" Size="Size.Large" />
-                <MudText Typo="Typo.h6">Project 1</MudText>
+                <MudIcon Icon="@ProjectIcon(Finance.CurrentProject?.Icon)" Color="Color.Primary" Size="Size.Large" />
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.h6">@(Finance.CurrentProject?.Name ?? "MonExA")</MudText>
+                    @if (Finance.IsLoaded)
+                    {
+                        <MudText Typo="Typo.caption">@RoleText(Finance.CurrentRole) · @Finance.StoreName</MudText>
+                    }
+                </MudStack>
             </MudStack>
         </MudDrawerHeader>
-        
+
         <MudNavMenu>
-            <MudNavLink Icon="@Icons.Material.Filled.Dashboard" IconColor="Color.Primary" Href="">Dashboard</MudNavLink>
+            <MudNavLink Icon="@Icons.Material.Filled.Dashboard" IconColor="Color.Primary" Href="" Match="NavLinkMatch.All">Dashboard</MudNavLink>
             <MudNavLink Icon="@Icons.Material.Filled.AccountBalance" IconColor="Color.Success" Href="konten">Konten</MudNavLink>
             <MudNavLink Icon="@Icons.Material.Filled.Receipt" IconColor="Color.Info" Href="transaktionen">Transaktionen</MudNavLink>
+            <MudNavLink Icon="@Icons.Material.Filled.EventRepeat" IconColor="Color.Info" Href="dauerauftraege">Daueraufträge</MudNavLink>
             <MudNavLink Icon="@Icons.Material.Filled.Category" IconColor="Color.Warning" Href="categories">Kategorien</MudNavLink>
-            <MudNavLink Icon="@Icons.Material.Filled.TrendingUp" IconColor="Color.Tertiary" Href="budgets">Budgets</MudNavLink>
+            <MudNavLink Icon="@Icons.Material.Filled.AccountBalanceWallet" IconColor="Color.Tertiary" Href="budgets">Budgets</MudNavLink>
+            <MudNavLink Icon="@Icons.Material.Filled.Savings" IconColor="Color.Success" Href="sparziele">Sparziele</MudNavLink>
             <MudNavLink Icon="@Icons.Material.Filled.BarChart" IconColor="Color.Secondary" Href="analysis">Analysen</MudNavLink>
-            
+
             <MudDivider Class="my-2" />
-            
-            <MudNavGroup Title="Berichte" Icon="@Icons.Material.Filled.Assessment" Expanded="false">
-                <MudNavLink Icon="@Icons.Material.Filled.CalendarMonth">Monatsbericht</MudNavLink>
-                <MudNavLink Icon="@Icons.Material.Filled.CalendarToday">Jahresbericht</MudNavLink>
-                <MudNavLink Icon="@Icons.Material.Filled.CompareArrows">Vergleiche</MudNavLink>
+
+            <MudNavGroup Title="Berichte" Icon="@Icons.Material.Filled.Assessment" Expanded="@Navigation.Uri.Contains("/berichte")">
+                <MudNavLink Icon="@Icons.Material.Filled.CalendarMonth" Href="berichte/monat">Monatsbericht</MudNavLink>
+                <MudNavLink Icon="@Icons.Material.Filled.CalendarToday" Href="berichte/jahr">Jahresbericht</MudNavLink>
+                <MudNavLink Icon="@Icons.Material.Filled.CompareArrows" Href="berichte/vergleich">Vergleiche</MudNavLink>
             </MudNavGroup>
-            
+
             <MudNavGroup Title="Einstellungen" Icon="@Icons.Material.Filled.Settings" Expanded="false">
-                <MudNavLink Icon="@Icons.Material.Filled.Person">Profil</MudNavLink>
-                <MudNavLink Icon="@Icons.Material.Filled.Notifications">Benachrichtigungen</MudNavLink>
-                <MudNavLink Icon="@Icons.Material.Filled.Security">Sicherheit</MudNavLink>
+                <MudNavLink Icon="@Icons.Material.Filled.Person" Href="einstellungen">Profil & App</MudNavLink>
+                <MudNavLink Icon="@Icons.Material.Filled.Groups" Href="projekte">Projekte & Mitglieder</MudNavLink>
             </MudNavGroup>
         </MudNavMenu>
-        
+
         <MudSpacer />
-            
         <MudDivider />
-            
         <MudText Typo="Typo.caption" Color="Color.Primary" Class="pa-3">
             © @DateTime.Now.Year Lucas Nagelsmann
         </MudText>
     </MudDrawer>
-    
-    <MudMainContent Class="pt-4" Style="margin-top: 50px">
-     @Body   
+
+    <MudMainContent Class="pt-4" Style="margin-top: 48px">
+        @if (Finance.IsLoading)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" Style="position: fixed; top: 48px; left: 0; right: 0; z-index: 1300;" />
+        }
+
+        @if (!Auth.IsAuthenticated)
+        {
+            <MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
+                <MudProgressCircular Indeterminate="true" />
+            </MudContainer>
+        }
+        else if (Finance.LoadError != null && !Finance.IsLoaded)
+        {
+            <MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+                    <MudText Typo="Typo.subtitle1">Daten konnten nicht geladen werden</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-3">@Finance.LoadError</MudText>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => Finance.LoadAsync())">Erneut versuchen</MudButton>
+                </MudAlert>
+            </MudContainer>
+        }
+        else if (!Finance.IsLoaded)
+        {
+            <MudStack AlignItems="AlignItems.Center" Class="mt-16">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+                <MudText Typo="Typo.body2">Lade Finanzdaten …</MudText>
+            </MudStack>
+        }
+        else
+        {
+            @if (!Finance.CanEdit)
+            {
+                <MudContainer MaxWidth="MaxWidth.ExtraLarge">
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">
+                        Du hast in diesem Projekt nur Leserechte – Änderungen sind deaktiviert.
+                    </MudAlert>
+                </MudContainer>
+            }
+            <ErrorBoundary @ref="_errorBoundary">
+                <ChildContent>@Body</ChildContent>
+                <ErrorContent Context="ex">
+                    <MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
+                        <MudAlert Severity="Severity.Error">
+                            Auf dieser Seite ist ein Fehler aufgetreten: @ex.Message
+                            <MudButton Class="ml-2" Size="Size.Small" OnClick="@(() => _errorBoundary?.Recover())">Erneut versuchen</MudButton>
+                        </MudAlert>
+                    </MudContainer>
+                </ErrorContent>
+            </ErrorBoundary>
+        }
     </MudMainContent>
 </MudLayout>
 
-
-@code{
-    
-    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
-    [Inject] private ISnackbar Snackbar { get; set; } = default!;
-
-    private bool _isDarkMode = true;
+@code {
     private bool _drawerOpen = true;
-    private string _currentProject = "Privat";
+    private ErrorBoundary? _errorBoundary;
+    private RealtimeSync? _realtime;
 
-    private readonly MudTheme _theme = new()
+    protected override async Task OnInitializedAsync()
     {
-        PaletteLight = new PaletteLight
+        Finance.Changed += OnStateChanged;
+        Preferences.Changed += OnStateChanged;
+        Auth.AuthStateChanged += OnAuthChanged;
+        _realtime = Services.GetService<RealtimeSync>();
+
+        if (await Auth.TryHandleRedirectAsync(new Uri(Navigation.Uri)))
+            Navigation.NavigateTo("", replace: true);
+
+        if (!Auth.IsAuthenticated)
         {
-            Primary = "#1976d2",
-            Secondary = "#9c27b0",
-            Success = "#4caf50",
-            Info = "#2196f3",
-            Warning = "#ff9800",
-            Error = "#f44336",
-            AppbarBackground = "#1976d2"
-        },
-        PaletteDark = new PaletteDark
-        {
-            Primary = "#90caf9",
-            Secondary = "#ce93d8",
-            Success = "#81c784",
-            Info = "#64b5f6",
-            Warning = "#ffb74d",
-            Error = "#e57373",
-            AppbarBackground = "#1e1e1e",
-            Background = "#121212",
-            Surface = "#1e1e1e",
-            BackgroundGray = "#1a1a1a",
-            DrawerBackground = "#1e1e1e"
+            Navigation.NavigateTo("login", replace: true);
+            return;
         }
-    };
 
-    
-
-    private void ToggleDarkMode()
-    {
-        _isDarkMode = !_isDarkMode;
-    }
-    
-    private void ToggleDrawer()
-    {
-        _drawerOpen = !_drawerOpen;
+        await Finance.EnsureLoadedAsync();
+        await SubscribeRealtime();
     }
 
-    private void SelectProject(Project project)
+    private async Task SubscribeRealtime()
     {
-        _currentProject = project.Name;
-        Snackbar.Add($"Projekt '{project.Name}' ausgewählt", Severity.Info);
-        // Hier würden Sie die Daten für das ausgewählte Projekt laden
+        if (_realtime != null && Finance.IsLoaded) await _realtime.SubscribeAsync();
     }
 
-    private void CreateNewProject()
+    private void OnStateChanged() => InvokeAsync(async () =>
     {
-        Snackbar.Add("Neues Projekt erstellen - Dialog öffnen", Severity.Normal);
-        // Hier würden Sie einen Dialog zum Erstellen eines neuen Projekts öffnen
+        StateHasChanged();
+        await SubscribeRealtime();
+    });
+
+    private void OnAuthChanged() => InvokeAsync(() =>
+    {
+        if (!Auth.IsAuthenticated)
+        {
+            Finance.Reset();
+            Navigation.NavigateTo("login", replace: true);
+        }
+        StateHasChanged();
+    });
+
+    private async Task SelectProject(Project project)
+    {
+        if (project.Id == Finance.CurrentProject?.Id) return;
+        await Finance.SelectProjectAsync(project.Id);
+        Snackbar.Add($"Projekt „{project.Name}“ ausgewählt", Severity.Info);
     }
 
-    private void NavigateToProfile()
+    private async Task CreateNewProject()
     {
-        NavigationManager.NavigateTo("/settings/profile");
-    }
-
-    private void NavigateToSettings()
-    {
-        NavigationManager.NavigateTo("/settings");
-    }
-
-    private void NavigateToAllTransactions()
-    {
-        NavigationManager.NavigateTo("/transactions");
+        var dialog = await DialogService.ShowAsync<ProjectDialog>("Neues Projekt",
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: ValueTuple<string, string> data })
+        {
+            var project = await Finance.CreateProjectAsync(data.Item1, data.Item2);
+            if (project != null) Snackbar.Add($"Projekt „{project.Name}“ wurde angelegt.", Severity.Success);
+        }
     }
 
     private async Task Logout()
     {
-        // Hier würden Sie die Logout-Logik implementieren
+        if (_realtime != null) await _realtime.UnsubscribeAsync();
+        await Auth.SignOutAsync();
         Snackbar.Add("Abgemeldet", Severity.Success);
-        await Task.Delay(500);
-        NavigationManager.NavigateTo("/login");
     }
 
+    public void Dispose()
+    {
+        Finance.Changed -= OnStateChanged;
+        Preferences.Changed -= OnStateChanged;
+        Auth.AuthStateChanged -= OnAuthChanged;
+    }
 }

@@ -1,179 +1,110 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Forms;
 using monexa.Models;
 using monexa.Models.Enums;
+using monexa.Services;
+using monexa.Shared;
 using MudBlazor;
+using static monexa.Services.UiHelpers;
 
 namespace monexa.Pages;
 
-public partial class Transactions : ComponentBase
+public partial class Transactions : FinancePage
 {
-     private List<Transaction> transactions = new();
-    private List<Konto> accounts = new();
+    [Inject] private ExportService Export { get; set; } = default!;
+
+    private record MonthGroup(string Label, List<Transaction> Items, decimal Income, decimal Expenses);
+
     private string searchString = "";
-    private int? selectedAccount = null;
-    private int? selectedCategory = null;
-    private TransactionType? selectedType = null;
+    private Guid? selectedAccount;
+    private Guid? selectedCategory;
+    private TransactionType? selectedType;
+    private DateRange? dateRange;
+    private List<Transaction> filtered = new();
+    private readonly HashSet<Guid> selected = new();
+    private int visibleCount = 100;
 
-    protected override void OnInitialized()
+    private bool _importOpen;
+    private Guid _importAccount;
+    private CsvImportResult? _importResult;
+
+    [SupplyParameterFromQuery(Name = "konto")] public Guid? AccountQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "kategorie")] public Guid? CategoryQuery { get; set; }
+
+    protected override async Task OnInitializedAsync()
     {
-        LoadTestData();
+        await base.OnInitializedAsync();
+        selectedAccount = AccountQuery;
+        selectedCategory = CategoryQuery;
+        _importAccount = Finance.ActiveAccounts.FirstOrDefault()?.Id ?? Guid.Empty;
+        ApplyFilter();
     }
 
-    private void LoadTestData()
+    protected override void OnDataChanged()
     {
-        accounts = new List<Konto>
-        {
-            new Konto { Id = 1, Name = "Hauptkonto" },
-            new Konto { Id = 2, Name = "Sparkonto" },
-            new Konto { Id = 3, Name = "Tagesgeldkonto" },
-            new Konto { Id = 4, Name = "Kreditkarte Premium" },
-            new Konto{ Id = 5, Name = "Depot" }
-        };
-
-        transactions = new List<Transaction>
-        {
-            new Transaction
-            {
-                Id = 1,
-                Description = "Gehalt Oktober",
-                Amount = 3500.00m,
-                Date = new DateTime(2024, 10, 1),
-                Type = TransactionType.Einnahme,
-                Category = TransactionCategory.Gehalt,
-                AccountId = 1,
-                Notes = "Monatliches Gehalt"
-            },
-            new Transaction
-            {
-                Id = 2,
-                Description = "Miete",
-                Amount = 950.00m,
-                Date = new DateTime(2024, 10, 3),
-                Type = TransactionType.Ausgabe,
-                Category = TransactionCategory.Wohnen,
-                AccountId = 1,
-                Notes = "Kaltmiete Wohnung"
-            },
-            new Transaction
-            {
-                Id = 3,
-                Description = "REWE Einkauf",
-                Amount = 127.45m,
-                Date = new DateTime(2024, 10, 5),
-                Type = TransactionType.Ausgabe,
-                Category = TransactionCategory.Lebensmittel,
-                AccountId = 1
-            },
-            new Transaction
-            {
-                Id = 4,
-                Description = "Strom & Gas",
-                Amount = 145.00m,
-                Date = new DateTime(2024, 10, 5),
-                Type = TransactionType.Ausgabe,
-                Category = TransactionCategory.Nebenkosten,
-                AccountId = 1,
-                Notes = "Monatlicher Abschlag"
-            },
-            new Transaction
-            {
-                Id = 5,
-                Description = "Überweisung auf Sparkonto",
-                Amount = 500.00m,
-                Date = new DateTime(2024, 10, 6),
-                Type = TransactionType.Umbuchung,
-                Category = TransactionCategory.Sparen,
-                AccountId = 1,
-                ToAccountId = 2
-            },
-            new Transaction
-            {
-                Id = 6,
-                Description = "Tankstelle",
-                Amount = 65.80m,
-                Date = new DateTime(2024, 10, 8),
-                Type = TransactionType.Ausgabe,
-                Category = TransactionCategory.Transport,
-                AccountId = 4
-            },
-            new Transaction
-            {
-                Id = 7,
-                Description = "Amazon Bestellung",
-                Amount = 89.99m,
-                Date = new DateTime(2024, 10, 10),
-                Type = TransactionType.Ausgabe,
-                Category = TransactionCategory.Shopping,
-                AccountId = 4
-            },
-            new Transaction
-            {
-                Id = 8,
-                Description = "Freelance Projekt",
-                Amount = 750.00m,
-                Date = new DateTime(2024, 10, 12),
-                Type = TransactionType.Einnahme,
-                Category = TransactionCategory.SonstigeEinnahmen,
-                AccountId = 1,
-                Notes = "Webdesign Projekt"
-            },
-            new Transaction
-            {
-                Id = 9,
-                Description = "Restaurant",
-                Amount = 45.50m,
-                Date = new DateTime(2024, 10, 14),
-                Type = TransactionType.Ausgabe,
-                Category = TransactionCategory.Freizeit,
-                AccountId = 4
-            },
-            new Transaction
-            {
-                Id = 10,
-                Description = "Fitnessstudio",
-                Amount = 39.90m,
-                Date = new DateTime(2024, 10, 15),
-                Type = TransactionType.Ausgabe,
-                Category = TransactionCategory.Gesundheit,
-                AccountId = 1,
-                Notes = "Monatsbeitrag"
-            }
-        };
+        selected.RemoveWhere(id => Finance.GetTransaction(id) == null);
+        ApplyFilter();
     }
 
-    private IEnumerable<Transaction> GetFilteredTransactions()
+    private decimal FilteredIncome => filtered.Where(t => t.Type == TransactionType.Einnahme).Sum(t => t.Amount);
+    private decimal FilteredExpenses => filtered.Where(t => t.Type == TransactionType.Ausgabe).Sum(t => t.Amount);
+
+    private string PeriodCaption => dateRange?.Start != null && dateRange.End != null
+        ? $"{Date(dateRange.Start.Value)} – {Date(dateRange.End.Value)}"
+        : "Gesamter Zeitraum";
+
+    private void ApplyFilter()
     {
-        var filtered = transactions.AsEnumerable();
+        var query = Finance.Transactions.AsEnumerable();
 
         if (!string.IsNullOrWhiteSpace(searchString))
         {
-            filtered = filtered.Where(t => 
+            query = query.Where(t =>
                 t.Description.Contains(searchString, StringComparison.OrdinalIgnoreCase) ||
-                (t.Notes != null && t.Notes.Contains(searchString, StringComparison.OrdinalIgnoreCase)));
+                (t.Notes != null && t.Notes.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ||
+                t.Amount.ToString("0.00", De).Contains(searchString));
         }
 
         if (selectedAccount.HasValue)
-        {
-            filtered = filtered.Where(t => t.AccountId == selectedAccount.Value);
-        }
+            query = query.Where(t => t.AccountId == selectedAccount || t.ToAccountId == selectedAccount);
 
         if (selectedCategory.HasValue)
-        {
-            filtered = filtered.Where(t => (int)t.Category == selectedCategory.Value);
-        }
+            query = selectedCategory == Guid.Empty
+                ? query.Where(t => t.CategoryId == null && t.Type != TransactionType.Umbuchung)
+                : query.Where(t => t.CategoryId == selectedCategory);
 
         if (selectedType.HasValue)
-        {
-            filtered = filtered.Where(t => t.Type == selectedType.Value);
-        }
+            query = query.Where(t => t.Type == selectedType.Value);
 
-        return filtered.OrderByDescending(t => t.Date);
+        if (dateRange?.Start != null)
+            query = query.Where(t => t.Date.Date >= dateRange.Start.Value.Date);
+        if (dateRange?.End != null)
+            query = query.Where(t => t.Date.Date <= dateRange.End.Value.Date);
+
+        filtered = query.ToList();
     }
 
-    private IEnumerable<IGrouping<string, Transaction>> GetGroupedTransactions()
+    private IEnumerable<MonthGroup> GetGroupedTransactions() =>
+        filtered.Take(visibleCount)
+            .GroupBy(t => FinanceState.MonthStart(t.Date))
+            .Select(g => new MonthGroup(
+                MonthYear(g.Key),
+                g.ToList(),
+                g.Where(t => t.Type == TransactionType.Einnahme).Sum(t => t.Amount),
+                g.Where(t => t.Type == TransactionType.Ausgabe).Sum(t => t.Amount)));
+
+    private void SetQuickRange(string key)
     {
-        return GetFilteredTransactions()
-            .GroupBy(t => t.Date.ToString("MMMM yyyy", new System.Globalization.CultureInfo("de-DE")));
+        var today = DateTime.Today;
+        var month = FinanceState.MonthStart(today);
+        dateRange = key switch
+        {
+            "lastmonth" => new DateRange(month.AddMonths(-1), month.AddDays(-1)),
+            "90" => new DateRange(today.AddDays(-89), today),
+            "year" => new DateRange(new DateTime(today.Year, 1, 1), new DateTime(today.Year, 12, 31)),
+            _ => new DateRange(month, month.AddMonths(1).AddDays(-1))
+        };
+        ApplyFilter();
     }
 
     private void ClearFilters()
@@ -182,127 +113,79 @@ public partial class Transactions : ComponentBase
         selectedAccount = null;
         selectedCategory = null;
         selectedType = null;
+        dateRange = null;
+        ApplyFilter();
     }
 
-    private decimal GetMonthlyIncome()
+    private static string GetFormattedAmount(Transaction transaction) => transaction.Type switch
     {
-        var currentMonth = DateTime.Now.Month;
-        var currentYear = DateTime.Now.Year;
-        return transactions
-            .Where(t => t.Type == TransactionType.Einnahme && 
-                       t.Date.Month == currentMonth && 
-                       t.Date.Year == currentYear)
-            .Sum(t => t.Amount);
+        TransactionType.Einnahme => "+ " + Money(transaction.Amount),
+        TransactionType.Ausgabe => "- " + Money(transaction.Amount),
+        _ => Money(transaction.Amount)
+    };
+
+    private void ToggleSelected(Guid id, bool value)
+    {
+        if (value) selected.Add(id);
+        else selected.Remove(id);
     }
 
-    private decimal GetMonthlyExpenses()
+    private async Task DeleteTransaction(Transaction transaction)
     {
-        var currentMonth = DateTime.Now.Month;
-        var currentYear = DateTime.Now.Year;
-        return transactions
-            .Where(t => t.Type == TransactionType.Ausgabe && 
-                       t.Date.Month == currentMonth && 
-                       t.Date.Year == currentYear)
-            .Sum(t => t.Amount);
+        if (!await ConfirmAsync("Transaktion löschen",
+                $"Soll die Transaktion <strong>{transaction.Description}</strong> ({Money(transaction.Amount)}) wirklich gelöscht werden?"))
+            return;
+        if (await Finance.DeleteTransactionAsync(transaction.Id))
+            Snackbar.Add("Transaktion gelöscht.", Severity.Success);
     }
 
-    private decimal GetMonthlySaldo()
+    private async Task DeleteSelected()
     {
-        return GetMonthlyIncome() - GetMonthlyExpenses();
-    }
-
-    private string GetAccountName(int accountId)
-    {
-        return accounts.FirstOrDefault(a => a.Id == accountId)?.Name ?? "Unbekannt";
-    }
-
-    private string GetFormattedAmount(Transaction transaction)
-    {
-        var prefix = transaction.Type == TransactionType.Einnahme ? "+" : "-";
-        return $"{prefix} {transaction.Amount.ToString("C", new System.Globalization.CultureInfo("de-DE"))}";
-    }
-
-    private void DeleteTransaction(Transaction transaction)
-    {
-        transactions.Remove(transaction);
-    }
-
-    private Color GetTransactionTypeColor(TransactionType type)
-    {
-        return type switch
+        if (!await ConfirmAsync("Transaktionen löschen", $"Sollen <strong>{selected.Count}</strong> Transaktionen wirklich gelöscht werden?"))
+            return;
+        var count = selected.Count;
+        if (await Finance.DeleteTransactionsAsync(selected.ToList()))
         {
-            TransactionType.Einnahme => Color.Success,
-            TransactionType.Ausgabe => Color.Error,
-            TransactionType.Umbuchung => Color.Info,
-            _ => Color.Default
-        };
+            selected.Clear();
+            Snackbar.Add($"{count} Transaktionen gelöscht.", Severity.Success);
+        }
     }
 
-    private Color GetCategoryColor(TransactionCategory category)
+    private async Task ExportCsv()
     {
-        return category switch
+        await Export.ExportTransactionsAsync(filtered);
+        Snackbar.Add($"{filtered.Count} Transaktionen exportiert.", Severity.Success);
+    }
+
+    private async Task OnImportFile(IBrowserFile? file)
+    {
+        if (file == null) return;
+        try
         {
-            TransactionCategory.Gehalt => Color.Success,
-            TransactionCategory.Lebensmittel => Color.Primary,
-            TransactionCategory.Wohnen => Color.Info,
-            TransactionCategory.Transport => Color.Warning,
-            TransactionCategory.Freizeit => Color.Secondary,
-            _ => Color.Default
-        };
-    }
-
-    private string GetCategoryIcon(TransactionCategory category)
-    {
-        return category switch
+            using var reader = new StreamReader(file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024));
+            var content = await reader.ReadToEndAsync();
+            _importResult = Export.ParseCsv(content, _importAccount);
+        }
+        catch (Exception ex)
         {
-            TransactionCategory.Gehalt => Icons.Material.Filled.AttachMoney,
-            TransactionCategory.Lebensmittel => Icons.Material.Filled.ShoppingCart,
-            TransactionCategory.Wohnen => Icons.Material.Filled.Home,
-            TransactionCategory.Transport => Icons.Material.Filled.DirectionsCar,
-            TransactionCategory.Freizeit => Icons.Material.Filled.SportsEsports,
-            TransactionCategory.Gesundheit => Icons.Material.Filled.LocalHospital,
-            TransactionCategory.Shopping => Icons.Material.Filled.ShoppingBag,
-            TransactionCategory.Nebenkosten => Icons.Material.Filled.Receipt,
-            TransactionCategory.Sparen => Icons.Material.Filled.Savings,
-            TransactionCategory.SonstigeEinnahmen => Icons.Material.Filled.TrendingUp,
-            TransactionCategory.SonstigeAusgaben => Icons.Material.Filled.MoreHoriz,
-            _ => Icons.Material.Filled.Category
-        };
+            Snackbar.Add($"Datei konnte nicht gelesen werden: {ex.Message}", Severity.Error);
+        }
     }
 
-    private string GetCategoryText(TransactionCategory category)
+    private async Task ConfirmImport()
     {
-        return category switch
+        if (_importResult == null) return;
+        var count = _importResult.Transactions.Count;
+        if (await Finance.ImportTransactionsAsync(_importResult.Transactions))
         {
-            TransactionCategory.Gehalt => "Gehalt",
-            TransactionCategory.Lebensmittel => "Lebensmittel",
-            TransactionCategory.Wohnen => "Wohnen",
-            TransactionCategory.Transport => "Transport",
-            TransactionCategory.Freizeit => "Freizeit",
-            TransactionCategory.Gesundheit => "Gesundheit",
-            TransactionCategory.Shopping => "Shopping",
-            TransactionCategory.Nebenkosten => "Nebenkosten",
-            TransactionCategory.Sparen => "Sparen",
-            TransactionCategory.SonstigeEinnahmen => "Sonstige Einnahmen",
-            TransactionCategory.SonstigeAusgaben => "Sonstige Ausgaben",
-            _ => category.ToString()
-        };
+            Snackbar.Add($"{count} Transaktionen importiert.", Severity.Success);
+            CloseImport();
+        }
     }
 
-    // Model Classes
-    public class Transaction
+    private void CloseImport()
     {
-        public int Id { get; set; }
-        public string Description { get; set; } = "";
-        public decimal Amount { get; set; }
-        public DateTime Date { get; set; }
-        public TransactionType Type { get; set; }
-        public TransactionCategory Category { get; set; }
-        public int AccountId { get; set; }
-        public int? ToAccountId { get; set; }
-        public string? Notes { get; set; }
+        _importOpen = false;
+        _importResult = null;
     }
-
-    
-    
 }

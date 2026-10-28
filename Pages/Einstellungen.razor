@@ -1,0 +1,193 @@
+@page "/einstellungen"
+@inherits FinancePage
+@inject AuthService Auth
+@inject PreferencesService Preferences
+@inject ExportService Export
+@inject SupabaseSettings SupabaseConfig
+@inject IServiceProvider Services
+
+<PageTitle>Einstellungen – MonExA</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4 mb-8">
+    <PageHeader Title="Einstellungen" Icon="@Icons.Material.Filled.Settings" Subtitle="Profil, Darstellung und Datenverwaltung" />
+
+    @* ── Profil ── *@
+    <MudPaper Elevation="0" Outlined="true" Class="pa-6 mb-4">
+        <MudText Typo="Typo.h6" Class="mb-4"><MudIcon Icon="@Icons.Material.Filled.Person" Class="mr-2 mb-1" />Profil</MudText>
+        <MudGrid>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_displayName" Label="Anzeigename" Variant="Variant.Outlined" Placeholder="@Auth.DisplayName"
+                              HelperText="Wird in der App zur Begrüßung verwendet" OnBlur="SaveDisplayName" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField Value="@Auth.Email" Label="E-Mail" Variant="Variant.Outlined" ReadOnly="true"
+                              HelperText="@(Auth.IsCloud ? (Auth.LastSignIn.HasValue ? $"Letzte Anmeldung: {Auth.LastSignIn.Value.ToLocalTime():dd.MM.yyyy HH:mm}" : "") : "Demo-Modus – kein Benutzerkonto")" />
+            </MudItem>
+            @if (Auth.IsCloud)
+            {
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_newPassword" Label="Neues Passwort" Variant="Variant.Outlined" InputType="InputType.Password"
+                                  Validation="@(new Func<string, string?>(p => string.IsNullOrEmpty(p) || p.Length >= 8 ? null : "Mindestens 8 Zeichen"))" Immediate="true" />
+                </MudItem>
+                <MudItem xs="12" sm="6" Class="d-flex align-center">
+                    <MudButton Variant="Variant.Outlined" Disabled="@(_newPassword.Length < 8)" OnClick="ChangePassword">Passwort ändern</MudButton>
+                    <MudSpacer />
+                    <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Logout" OnClick="SignOut">Abmelden</MudButton>
+                </MudItem>
+            }
+        </MudGrid>
+    </MudPaper>
+
+    @* ── Darstellung & Verhalten ── *@
+    <MudPaper Elevation="0" Outlined="true" Class="pa-6 mb-4">
+        <MudText Typo="Typo.h6" Class="mb-4"><MudIcon Icon="@Icons.Material.Filled.Tune" Class="mr-2 mb-1" />Darstellung & Verhalten</MudText>
+        <MudStack Spacing="3">
+            <MudSwitch T="bool" Value="Preferences.DarkMode" ValueChanged="@(v => Preferences.DarkMode = v)" Color="Color.Primary" Label="Dunkles Design" />
+            <MudSwitch T="bool" Value="Preferences.AutoBookRecurring" ValueChanged="@(v => Preferences.AutoBookRecurring = v)" Color="Color.Primary"
+                       Label="Fällige Daueraufträge beim Start automatisch buchen" />
+            <MudStack Spacing="0">
+                <MudText Typo="Typo.body2">Budget-Warnschwelle: <strong>@Preferences.BudgetWarningPercent %</strong></MudText>
+                <MudSlider T="int" Value="Preferences.BudgetWarningPercent" ValueChanged="@(v => Preferences.BudgetWarningPercent = v)"
+                           Min="50" Max="100" Step="5" Color="Color.Warning" Style="max-width: 400px;" />
+                <MudText Typo="Typo.caption">Ab dieser Auslastung werden Budgets als „kritisch“ markiert.</MudText>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+
+    @* ── Daten ── *@
+    <MudPaper Elevation="0" Outlined="true" Class="pa-6 mb-4">
+        <MudText Typo="Typo.h6" Class="mb-1"><MudIcon Icon="@Icons.Material.Filled.Storage" Class="mr-2 mb-1" />Daten</MudText>
+        <MudText Typo="Typo.body2" Class="mb-4">Aktuelles Projekt: <strong>@Finance.CurrentProject?.Name</strong></MudText>
+        <MudStack Spacing="3">
+            <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportBackup">JSON-Backup exportieren</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.TableView" OnClick="ExportCsv">Alle Transaktionen als CSV</MudButton>
+                <MudFileUpload T="IBrowserFile" FilesChanged="ImportBackup" Accept=".json,application/json">
+                    <ActivatorContent>
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Upload">Backup als neues Projekt importieren</MudButton>
+                    </ActivatorContent>
+                </MudFileUpload>
+            </MudStack>
+            <MudText Typo="Typo.caption">
+                Das Backup enthält Konten, Kategorien, Buchungen, Budgets, Daueraufträge und Sparziele des aktuellen Projekts.
+                Beim Import wird immer ein neues Projekt angelegt – bestehende Daten bleiben unangetastet.
+            </MudText>
+        </MudStack>
+    </MudPaper>
+
+    @* ── Verbindung ── *@
+    <MudPaper Elevation="0" Outlined="true" Class="pa-6 mb-4">
+        <MudText Typo="Typo.h6" Class="mb-4"><MudIcon Icon="@Icons.Material.Filled.Cloud" Class="mr-2 mb-1" />Verbindung</MudText>
+        @if (Auth.IsCloud)
+        {
+            <MudAlert Severity="Severity.Success" Dense="true">
+                Verbunden mit Supabase: <code>@SupabaseConfig.Url</code>.
+                Daten werden in der Cloud gespeichert und per Row Level Security geschützt.
+                Realtime-Sync: @(Services.GetService<RealtimeSync>()?.IsConnected == true ? "aktiv" : "inaktiv").
+            </MudAlert>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                <strong>Demo-Modus:</strong> Alle Daten liegen nur im localStorage dieses Browsers.
+                Um mehrere Geräte und Teammitglieder zu nutzen, trage in <code>wwwroot/appsettings.json</code>
+                die Supabase-URL und den anon-Key ein und führe <code>supabase/migrations/0001_init.sql</code> aus.
+            </MudAlert>
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.RestartAlt" OnClick="ResetDemo">
+                Alle lokalen Daten zurücksetzen
+            </MudButton>
+        }
+    </MudPaper>
+
+    <MudText Typo="Typo.caption" Align="Align.Center" Class="d-block">
+        MonExA · @typeof(Program).Assembly.GetName().Version · Speicher: @Finance.StoreName
+    </MudText>
+</MudContainer>
+
+@code {
+    private string _displayName = "";
+    private string _newPassword = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        _displayName = Preferences.DisplayName;
+    }
+
+    private void SaveDisplayName()
+    {
+        if (_displayName.Trim() == Preferences.DisplayName) return;
+        Preferences.DisplayName = _displayName.Trim();
+        Snackbar.Add("Anzeigename gespeichert.", Severity.Success);
+    }
+
+    private async Task ChangePassword()
+    {
+        var result = await Auth.ChangePasswordAsync(_newPassword);
+        Snackbar.Add(result.Message ?? "", result.Success ? Severity.Success : Severity.Error);
+        if (result.Success) _newPassword = "";
+    }
+
+    private async Task SignOut()
+    {
+        var realtime = Services.GetService<RealtimeSync>();
+        if (realtime != null) await realtime.UnsubscribeAsync();
+        await Auth.SignOutAsync();
+    }
+
+    private async Task ExportBackup()
+    {
+        await Export.ExportBackupAsync();
+        Snackbar.Add("Backup wurde heruntergeladen.", Severity.Success);
+    }
+
+    private Task ExportCsv() => Export.ExportTransactionsAsync(Finance.Transactions);
+
+    private async Task ImportBackup(IBrowserFile? file)
+    {
+        if (file == null) return;
+        string json;
+        try
+        {
+            using var reader = new StreamReader(file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024));
+            json = await reader.ReadToEndAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Datei konnte nicht gelesen werden: {ex.Message}", Severity.Error);
+            return;
+        }
+
+        var backup = Export.ParseBackup(json);
+        if (backup == null || (!backup.Accounts.Any() && !backup.Transactions.Any()))
+        {
+            Snackbar.Add("Die Datei ist kein gültiges MonExA-Backup.", Severity.Error);
+            return;
+        }
+
+        var name = string.IsNullOrWhiteSpace(backup.ProjectName) ? "Importiertes Projekt" : $"{backup.ProjectName} (Import)";
+        if (!await ConfirmAsync("Backup importieren",
+                $"Aus dem Backup vom {backup.ExportedAt:dd.MM.yyyy} wird das Projekt <strong>{name}</strong> mit " +
+                $"{backup.Accounts.Count} Konten und {backup.Transactions.Count} Buchungen angelegt.", "Importieren"))
+            return;
+
+        var project = await Finance.ImportBackupAsNewProjectAsync(backup, name);
+        if (project != null)
+            Snackbar.Add($"Projekt „{project.Name}“ wurde importiert.", Severity.Success);
+    }
+
+    private async Task ResetDemo()
+    {
+        if (!await ConfirmAsync("Lokale Daten zurücksetzen",
+                "Alle lokal gespeicherten Projekte, Konten und Buchungen werden gelöscht und durch frische Beispieldaten ersetzt.", "Zurücksetzen"))
+            return;
+        if (Services.GetService<monexa.Services.Data.LocalDataStore>() is { } local)
+        {
+            local.Clear();
+            Preferences.LastProjectId = null;
+            Finance.Reset();
+            await Finance.LoadAsync();
+            Snackbar.Add("Beispieldaten wurden neu erstellt.", Severity.Success);
+        }
+    }
+}

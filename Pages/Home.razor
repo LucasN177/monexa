@@ -1,281 +1,300 @@
 ﻿@page "/"
-@using monexa.Models
+@inherits FinancePage
 
-<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mb-4">
-    <!-- Übersichtskarten -->
+<PageTitle>Dashboard – MonExA</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mb-8">
+    <PageHeader Title="@($"Hallo{(string.IsNullOrEmpty(_name) ? "" : ", " + _name)}!")"
+                Subtitle="@($"Übersicht für {MonthYear(DateTime.Today)} · {Finance.CurrentProject?.Name}")">
+        <Actions>
+            @if (Finance.CanEdit)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="transaktionen/neu">
+                    Neue Transaktion
+                </MudButton>
+            }
+        </Actions>
+    </PageHeader>
+
+    @* ── KPIs ── *@
     <MudGrid>
         <MudItem xs="12" sm="6" md="3">
-            <MudCard Elevation="2">
-                <MudCardContent>
-                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-                        <div>
-                            <MudText Typo="Typo.body2" Color="Color.Secondary">Gesamtvermögen</MudText>
-                            <MudText Typo="Typo.h5">€24.580,50</MudText>
-                            <MudText Typo="Typo.caption" Color="Color.Success">+12,5% vs. Vormonat</MudText>
-                        </div>
-                        <MudIcon Icon="@Icons.Material.Filled.AccountBalance" Color="Color.Primary" Size="Size.Large" />
-                    </MudStack>
-                </MudCardContent>
-            </MudCard>
+            <StatCard Title="Gesamtvermögen" Value="@Money(Finance.NetWorth)"
+                      Caption="@DeltaText(Finance.NetWorth, _netWorthLastMonth, "vs. Vormonatsende")"
+                      CaptionColor="@(Finance.NetWorth >= _netWorthLastMonth ? Color.Success : Color.Error)"
+                      Icon="@Icons.Material.Filled.AccountBalance" IconColor="Color.Primary" />
         </MudItem>
-                
         <MudItem xs="12" sm="6" md="3">
-            <MudCard Elevation="2">
-                <MudCardContent>
-                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-                        <div>
-                            <MudText Typo="Typo.body2" Color="Color.Secondary">Einnahmen</MudText>
-                            <MudText Typo="Typo.h5">€3.450,00</MudText>
-                            <MudText Typo="Typo.caption" Color="Color.Success">+5,2% vs. Vormonat</MudText>
-                        </div>
-                        <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Color="Color.Success" Size="Size.Large" />
-                    </MudStack>
-                </MudCardContent>
-            </MudCard>
+            <StatCard Title="Einnahmen (Monat)" Value="@Money(_income)" ValueColor="Color.Success"
+                      Caption="@DeltaText(_income, _incomePrev, "vs. Vormonat")"
+                      CaptionColor="@(_income >= _incomePrev ? Color.Success : Color.Error)"
+                      Icon="@Icons.Material.Filled.TrendingUp" IconColor="Color.Success" />
         </MudItem>
-                
         <MudItem xs="12" sm="6" md="3">
-            <MudCard Elevation="2">
-                <MudCardContent>
-                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-                        <div>
-                            <MudText Typo="Typo.body2" Color="Color.Secondary">Ausgaben</MudText>
-                            <MudText Typo="Typo.h5">€2.180,30</MudText>
-                            <MudText Typo="Typo.caption" Color="Color.Error">+8,1% vs. Vormonat</MudText>
-                        </div>
-                        <MudIcon Icon="@Icons.Material.Filled.TrendingDown" Color="Color.Error" Size="Size.Large" />
-                    </MudStack>
-                </MudCardContent>
-            </MudCard>
+            <StatCard Title="Ausgaben (Monat)" Value="@Money(_expenses)" ValueColor="Color.Error"
+                      Caption="@DeltaText(_expenses, _expensesPrev, "vs. Vormonat")"
+                      CaptionColor="@(_expenses <= _expensesPrev ? Color.Success : Color.Error)"
+                      Icon="@Icons.Material.Filled.TrendingDown" IconColor="Color.Error" />
         </MudItem>
-                
         <MudItem xs="12" sm="6" md="3">
-            <MudCard Elevation="2">
-                <MudCardContent>
-                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-                        <div>
-                            <MudText Typo="Typo.body2" Color="Color.Secondary">Budget übrig</MudText>
-                            <MudText Typo="Typo.h5">€1.269,70</MudText>
-                            <MudText Typo="Typo.caption" Color="Color.Info">58% von €2.200</MudText>
-                        </div>
-                        <MudIcon Icon="@Icons.Material.Filled.Savings" Color="Color.Info" Size="Size.Large" />
-                    </MudStack>
-                </MudCardContent>
-            </MudCard>
+            @if (_budgetTotal > 0)
+            {
+                <StatCard Title="Budget übrig" Value="@Money(_budgetTotal - _budgetSpent)"
+                          ValueColor="@(_budgetSpent > _budgetTotal ? Color.Error : Color.Default)"
+                          Caption="@($"{Percent(_budgetTotal > 0 ? (double)(_budgetSpent / _budgetTotal * 100) : 0)} von {MoneyShort(_budgetTotal)} genutzt")"
+                          Icon="@Icons.Material.Filled.Savings" IconColor="Color.Info" />
+            }
+            else
+            {
+                <StatCard Title="Sparquote (Monat)" Value="@Percent(_income > 0 ? (double)((_income - _expenses) / _income * 100) : 0)"
+                          Caption="Anteil der Einnahmen, der übrig bleibt"
+                          Icon="@Icons.Material.Filled.Savings" IconColor="Color.Info" />
+            }
         </MudItem>
     </MudGrid>
-            
-    <!-- Charts und Tabellen -->
-    <MudGrid Class="mt-4">
+
+    @* ── Charts ── *@
+    <MudGrid Class="mt-2">
         <MudItem xs="12" md="8">
-            <MudCard Elevation="2">
-                <MudCardHeader>
-                    <CardHeaderContent>
-                        <MudText Typo="Typo.h6">Finanzübersicht</MudText>
-                    </CardHeaderContent>
-                    <CardHeaderActions>
-                        <MudIconButton Icon="@Icons.Material.Filled.MoreVert" Color="Color.Default" />
-                    </CardHeaderActions>
-                </MudCardHeader>
-                <MudCardContent>
-                    <MudChart ChartType="ChartType.Line" 
-                              ChartSeries="@_chartSeries" 
-                              XAxisLabels="@_xAxisLabels" 
-                              Width="100%" 
-                              Height="300px" />
-                </MudCardContent>
-            </MudCard>
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4" Style="height: 100%;">
+                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                    <MudText Typo="Typo.h6">Finanzübersicht</MudText>
+                    <MudToggleGroup T="string" @bind-Value="_chartMode" Size="Size.Small" Color="Color.Primary" Outlined="true">
+                        <MudToggleItem Value="@("cashflow")" Text="Cashflow" />
+                        <MudToggleItem Value="@("vermoegen")" Text="Vermögen" />
+                    </MudToggleGroup>
+                </MudStack>
+                @if (_chartMode == "cashflow")
+                {
+                    <MudChart ChartType="ChartType.Bar" ChartSeries="@_cashflowSeries" XAxisLabels="@_monthLabels"
+                              ChartOptions="@_chartOptions" Width="100%" Height="300px" />
+                }
+                else
+                {
+                    <MudChart ChartType="ChartType.Line" ChartSeries="@_netWorthSeries" XAxisLabels="@_monthLabels"
+                              ChartOptions="@_chartOptions" Width="100%" Height="300px" />
+                }
+            </MudPaper>
         </MudItem>
-                
+
         <MudItem xs="12" md="4">
-            <MudCard Elevation="2">
-                <MudCardHeader>
-                    <CardHeaderContent>
-                        <MudText Typo="Typo.h6">Ausgaben nach Kategorie</MudText>
-                    </CardHeaderContent>
-                </MudCardHeader>
-                <MudCardContent>
-                    <MudChart ChartType="ChartType.Donut" 
-                              InputData="@_categoryData" 
-                              InputLabels="@_categoryLabels" 
-                              Width="100%" 
-                              Height="300px" />
-                </MudCardContent>
-            </MudCard>
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4" Style="height: 100%;">
+                <MudText Typo="Typo.h6" Class="mb-2">Ausgaben nach Kategorie</MudText>
+                @if (_categoryData.Length == 0)
+                {
+                    <MudText Typo="Typo.body2" Class="mt-8" Align="Align.Center">Diesen Monat noch keine Ausgaben.</MudText>
+                }
+                else
+                {
+                    <MudChart ChartType="ChartType.Donut" InputData="@_categoryData" InputLabels="@_categoryLabels"
+                              Width="100%" Height="260px" />
+                    <MudText Typo="Typo.caption" Align="Align.Center" Class="d-block">Gesamt: @Money(_expenses)</MudText>
+                }
+            </MudPaper>
         </MudItem>
     </MudGrid>
-            
-    <!-- Letzte Transaktionen -->
-    <MudPaper Elevation="2" Class="mt-4 pa-4">
-        <MudText Typo="Typo.h6" Class="mb-4">Letzte Transaktionen</MudText>
-        <MudTable Items="@_recentTransactions" Hover="true" Breakpoint="Breakpoint.Sm">
-            <HeaderContent>
-                <MudTh>Datum</MudTh>
-                <MudTh>Beschreibung</MudTh>
-                <MudTh>Kategorie</MudTh>
-                <MudTh>Konto</MudTh>
-                <MudTh Style="text-align: right">Betrag</MudTh>
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd DataLabel="Datum">@context.Date.ToString("dd.MM.yyyy")</MudTd>
-                <MudTd DataLabel="Beschreibung">@context.Description</MudTd>
-                <MudTd DataLabel="Kategorie">
-                    <MudChip T="string" Size="Size.Small" Color="@context.CategoryColor">@context.Category</MudChip>
-                </MudTd>
-                <MudTd DataLabel="Konto">@context.Account</MudTd>
-                <MudTd DataLabel="Betrag" Style="text-align: right">
-                    <MudText Color="@(context.Amount >= 0 ? Color.Success : Color.Error)" Typo="Typo.body2">
-                        @context.Amount.ToString("C2")
-                    </MudText>
-                </MudTd>
-            </RowTemplate>
-        </MudTable>
-    </MudPaper>
+
+    <MudGrid Class="mt-2">
+        @* ── Letzte Transaktionen ── *@
+        <MudItem xs="12" lg="8">
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4">
+                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
+                    <MudText Typo="Typo.h6">Letzte Transaktionen</MudText>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" EndIcon="@Icons.Material.Filled.ChevronRight" Href="transaktionen">Alle anzeigen</MudButton>
+                </MudStack>
+                <MudTable Items="@Finance.Transactions.Take(8)" Hover="true" Dense="true" Elevation="0" Breakpoint="Breakpoint.Sm"
+                          OnRowClick="@((TableRowClickEventArgs<Transaction> e) => Navigation.NavigateTo($"transaktionen/{e.Item!.Id}/bearbeiten"))"
+                          RowStyle="cursor: pointer;">
+                    <HeaderContent>
+                        <MudTh>Datum</MudTh>
+                        <MudTh>Beschreibung</MudTh>
+                        <MudTh>Kategorie</MudTh>
+                        <MudTh>Konto</MudTh>
+                        <MudTh Style="text-align: right">Betrag</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Datum">@Date(context.Date)</MudTd>
+                        <MudTd DataLabel="Beschreibung">@context.Description</MudTd>
+                        <MudTd DataLabel="Kategorie">
+                            @{ var cat = Finance.GetCategory(context.CategoryId); }
+                            @if (cat != null)
+                            {
+                                <MudChip T="string" Size="Size.Small" Icon="@Icon(cat.Icon)" Color="@ParseColor(cat.Color)">@cat.Name</MudChip>
+                            }
+                            else if (context.Type == TransactionType.Umbuchung)
+                            {
+                                <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.SwapHoriz" Color="Color.Info" Variant="Variant.Outlined">Umbuchung</MudChip>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Konto">@Finance.AccountName(context.AccountId)</MudTd>
+                        <MudTd DataLabel="Betrag" Style="text-align: right">
+                            <MudText Typo="Typo.body2" Color="@TransactionTypeColor(context.Type)">
+                                @(context.Type == TransactionType.Umbuchung ? Money(context.Amount) : SignedMoney(FinanceState.SignedAmount(context)))
+                            </MudText>
+                        </MudTd>
+                    </RowTemplate>
+                    <NoRecordsContent>
+                        <MudText Typo="Typo.body2" Class="pa-4">Noch keine Transaktionen erfasst.</MudText>
+                    </NoRecordsContent>
+                </MudTable>
+            </MudPaper>
+        </MudItem>
+
+        @* ── Seitenleiste ── *@
+        <MudItem xs="12" lg="4">
+            <MudStack Spacing="3">
+                <MudPaper Elevation="0" Outlined="true" Class="pa-4">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
+                        <MudText Typo="Typo.h6">Budgets</MudText>
+                        <MudButton Variant="Variant.Text" Size="Size.Small" Href="budgets">Verwalten</MudButton>
+                    </MudStack>
+                    @if (!_budgetUsage.Any())
+                    {
+                        <MudText Typo="Typo.body2">Noch keine Budgets angelegt.</MudText>
+                    }
+                    @foreach (var (budget, spent, pct) in _budgetUsage)
+                    {
+                        <MudStack Spacing="1" Class="mb-3">
+                            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                    <MudIcon Icon="@Icon(budget.Icon)" Size="Size.Small" Color="@ParseColor(budget.Color)" />
+                                    <MudText Typo="Typo.body2">@budget.Name</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.caption" Color="@UsageColor(pct)">@MoneyShort(spent) / @MoneyShort(budget.Limit)</MudText>
+                            </MudStack>
+                            <MudProgressLinear Value="@Math.Min(pct, 100)" Color="@UsageColor(pct)" Rounded="true" Size="Size.Small" />
+                        </MudStack>
+                    }
+                </MudPaper>
+
+                <MudPaper Elevation="0" Outlined="true" Class="pa-4">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
+                        <MudText Typo="Typo.h6">Demnächst fällig</MudText>
+                        <MudButton Variant="Variant.Text" Size="Size.Small" Href="dauerauftraege">Alle</MudButton>
+                    </MudStack>
+                    @if (!_upcoming.Any())
+                    {
+                        <MudText Typo="Typo.body2">Keine anstehenden Daueraufträge.</MudText>
+                    }
+                    @foreach (var r in _upcoming)
+                    {
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
+                            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@TransactionTypeIcon(r.Type)" Size="Size.Small" Color="@TransactionTypeColor(r.Type)" />
+                                <MudStack Spacing="0">
+                                    <MudText Typo="Typo.body2">@r.Description</MudText>
+                                    <MudText Typo="Typo.caption">@Date(r.NextDue) · @IntervalText(r.Interval)</MudText>
+                                </MudStack>
+                            </MudStack>
+                            <MudText Typo="Typo.body2" Color="@TransactionTypeColor(r.Type)">@Money(r.Amount)</MudText>
+                        </MudStack>
+                    }
+                </MudPaper>
+
+                @if (Finance.Goals.Any())
+                {
+                    <MudPaper Elevation="0" Outlined="true" Class="pa-4">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
+                            <MudText Typo="Typo.h6">Sparziele</MudText>
+                            <MudButton Variant="Variant.Text" Size="Size.Small" Href="sparziele">Alle</MudButton>
+                        </MudStack>
+                        @foreach (var g in Finance.Goals.Take(3))
+                        {
+                            var pct = g.TargetAmount > 0 ? (double)(g.CurrentAmount / g.TargetAmount * 100) : 0;
+                            <MudStack Spacing="1" Class="mb-3">
+                                <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                    <MudText Typo="Typo.body2">@g.Name</MudText>
+                                    <MudText Typo="Typo.caption">@Percent(pct)</MudText>
+                                </MudStack>
+                                <MudProgressLinear Value="@Math.Min(pct, 100)" Color="@ParseColor(g.Color)" Rounded="true" Size="Size.Small" />
+                            </MudStack>
+                        }
+                    </MudPaper>
+                }
+            </MudStack>
+        </MudItem>
+    </MudGrid>
 </MudContainer>
 
-@code{
+@code {
+    [Inject] private AuthService Auth { get; set; } = default!;
 
-    private readonly ChartOptions _chartOptions = new()
-    {
-        YAxisTicks = 500,
-        MaxNumYAxisTicks = 10,
-        YAxisFormat = "C0"
-    };
-
-    private List<ChartSeries> _chartSeries = new();
-    private string[] _xAxisLabels = Array.Empty<string>();
+    private string _name = "";
+    private string _chartMode = "cashflow";
+    private decimal _income, _incomePrev, _expenses, _expensesPrev, _netWorthLastMonth;
+    private decimal _budgetTotal, _budgetSpent;
+    private List<(Budget Budget, decimal Spent, double Percent)> _budgetUsage = new();
+    private List<RecurringTransaction> _upcoming = new();
+    private List<ChartSeries> _cashflowSeries = new();
+    private List<ChartSeries> _netWorthSeries = new();
+    private string[] _monthLabels = Array.Empty<string>();
     private double[] _categoryData = Array.Empty<double>();
     private string[] _categoryLabels = Array.Empty<string>();
-    
-    private List<Project> _projects = new();
-    private List<FinancialStat> _financialStats = new();
-    private List<Transaction> _recentTransactions = new();
 
-    protected override void OnInitialized()
+    private readonly ChartOptions _chartOptions = new() { YAxisFormat = "N0", MaxNumYAxisTicks = 8 };
+
+    protected override async Task OnInitializedAsync()
     {
-        InitializeProjects();
-        InitializeFinancialStats();
-        InitializeChartData();
-        InitializeTransactions();
+        await base.OnInitializedAsync();
+        _name = Auth.DisplayName;
+        Compute();
     }
 
-    private void InitializeProjects()
+    protected override void OnDataChanged() => Compute();
+
+    private void Compute()
     {
-        _projects = new List<Project>
+        var today = DateTime.Today;
+        var month = FinanceState.MonthStart(today);
+
+        _income = Finance.MonthIncome(month);
+        _incomePrev = Finance.MonthIncome(month.AddMonths(-1));
+        _expenses = Finance.MonthExpenses(month);
+        _expensesPrev = Finance.MonthExpenses(month.AddMonths(-1));
+        _netWorthLastMonth = Finance.NetWorthAt(month.AddDays(-1));
+
+        var budgets = Finance.Budgets.Where(b => b.Period == BudgetPeriod.Monatlich && b.CategoryId != null).ToList();
+        _budgetTotal = budgets.Sum(b => b.Limit);
+        _budgetSpent = budgets.Sum(b => Finance.BudgetSpent(b, today));
+        _budgetUsage = Finance.Budgets
+            .Select(b =>
+            {
+                var spent = Finance.BudgetSpent(b, today);
+                return (b, spent, b.Limit > 0 ? (double)(spent / b.Limit * 100) : 0);
+            })
+            .OrderByDescending(x => x.Item3)
+            .Take(5)
+            .ToList();
+
+        _upcoming = Finance.Recurring.Where(r => r.IsActive).OrderBy(r => r.NextDue).Take(5).ToList();
+
+        var months = Enumerable.Range(0, 6).Select(i => month.AddMonths(i - 5)).ToList();
+        _monthLabels = months.Select(m => m.ToString("MMM", De)).ToArray();
+        _cashflowSeries = new()
         {
-            new() { Name = "Privat", Icon = Icons.Material.Filled.Home },
-            new() { Name = "Geschäftlich", Icon = Icons.Material.Filled.Business },
-            new() { Name = "Investments", Icon = Icons.Material.Filled.Savings }
+            new ChartSeries { Name = "Einnahmen", Data = months.Select(m => (double)Finance.MonthIncome(m)).ToArray() },
+            new ChartSeries { Name = "Ausgaben", Data = months.Select(m => (double)Finance.MonthExpenses(m)).ToArray() }
         };
-    }
-
-    private void InitializeFinancialStats()
-    {
-        _financialStats = new List<FinancialStat>
+        _netWorthSeries = new()
         {
-            new()
+            new ChartSeries
             {
-                Title = "Gesamtvermögen",
-                Value = 24580.50m,
-                TrendText = "+12,5% vs. Vormonat",
-                TrendColor = Color.Success,
-                Icon = Icons.Material.Filled.AccountBalance,
-                IconColor = Color.Primary
-            },
-            new()
-            {
-                Title = "Einnahmen",
-                Value = 3450.00m,
-                TrendText = "+5,2% vs. Vormonat",
-                TrendColor = Color.Success,
-                Icon = Icons.Material.Filled.TrendingUp,
-                IconColor = Color.Success
-            },
-            new()
-            {
-                Title = "Ausgaben",
-                Value = 2180.30m,
-                TrendText = "+8,1% vs. Vormonat",
-                TrendColor = Color.Error,
-                Icon = Icons.Material.Filled.TrendingDown,
-                IconColor = Color.Error
-            },
-            new()
-            {
-                Title = "Budget übrig",
-                Value = 1269.70m,
-                TrendText = "58% von €2.200",
-                TrendColor = Color.Info,
-                Icon = Icons.Material.Filled.Savings,
-                IconColor = Color.Info
+                Name = "Vermögen",
+                Data = months.Select(m => (double)Finance.NetWorthAt(m == month ? today : m.AddMonths(1).AddDays(-1))).ToArray()
             }
         };
+
+        var byCategory = Finance.ExpensesByCategory(month, month.AddMonths(1));
+        var top = byCategory.Take(6).ToList();
+        var rest = byCategory.Skip(6).Sum(x => x.Amount);
+        _categoryData = top.Select(x => (double)x.Amount).Concat(rest > 0 ? new[] { (double)rest } : Array.Empty<double>()).ToArray();
+        _categoryLabels = top.Select(x => x.Category?.Name ?? "Ohne Kategorie").Concat(rest > 0 ? new[] { "Weitere" } : Array.Empty<string>()).ToArray();
     }
 
-    private void InitializeChartData()
+    private static string DeltaText(decimal current, decimal previous, string suffix)
     {
-        _chartSeries = new List<ChartSeries>
-        {
-            new() { Name = "Einnahmen", Data = new double[] { 3200, 3400, 3100, 3600, 3450 } },
-            new() { Name = "Ausgaben", Data = new double[] { 2100, 1900, 2400, 2000, 2180 } }
-        };
-
-        _xAxisLabels = new[] { "Aug", "Sep", "Okt", "Nov", "Dez" };
-
-        _categoryData = new double[] { 650, 420, 380, 280, 230, 220 };
-        _categoryLabels = new[] { "Lebensmittel", "Transport", "Unterhaltung", "Shopping", "Gesundheit", "Sonstiges" };
+        if (previous == 0) return "Kein Vergleichswert";
+        var delta = (double)((current - previous) / Math.Abs(previous) * 100);
+        return $"{(delta >= 0 ? "+" : "")}{delta.ToString("0.0", De)} % {suffix}";
     }
-
-    private void InitializeTransactions()
-    {
-        _recentTransactions = new List<Transaction>
-        {
-            new()
-            {
-                Date = DateTime.Now.AddDays(-1),
-                Description = "Supermarkt Rewe",
-                Category = "Lebensmittel",
-                CategoryColor = Color.Success,
-                Account = "Girokonto",
-                Amount = -85.50m
-            },
-            new()
-            {
-                Date = DateTime.Now.AddDays(-2),
-                Description = "Gehalt",
-                Category = "Einkommen",
-                CategoryColor = Color.Primary,
-                Account = "Girokonto",
-                Amount = 3450.00m
-            },
-            new()
-            {
-                Date = DateTime.Now.AddDays(-3),
-                Description = "Netflix",
-                Category = "Unterhaltung",
-                CategoryColor = Color.Info,
-                Account = "Kreditkarte",
-                Amount = -15.99m
-            },
-            new()
-            {
-                Date = DateTime.Now.AddDays(-4),
-                Description = "Tankstelle",
-                Category = "Transport",
-                CategoryColor = Color.Warning,
-                Account = "Girokonto",
-                Amount = -65.00m
-            },
-            new()
-            {
-                Date = DateTime.Now.AddDays(-5),
-                Description = "Amazon",
-                Category = "Shopping",
-                CategoryColor = Color.Secondary,
-                Account = "Kreditkarte",
-                Amount = -124.99m
-            }
-        };
-    }
-
 }

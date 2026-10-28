@@ -1,0 +1,285 @@
+@page "/sparziele"
+@inherits FinancePage
+
+<PageTitle>Sparziele – MonExA</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-8">
+    <PageHeader Title="Sparziele" Icon="@Icons.Material.Filled.Savings" Subtitle="Behalte im Blick, wofür du sparst und wie viel noch fehlt">
+        <Actions>
+            @if (Finance.CanEdit)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreate">Neues Sparziel</MudButton>
+            }
+        </Actions>
+    </PageHeader>
+
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="4">
+            <StatCard Title="Angespart" Value="@Money(Finance.Goals.Sum(g => g.CurrentAmount))" ValueColor="Color.Success" Icon="@Icons.Material.Filled.Savings" IconColor="Color.Success"
+                      Caption="@($"{Finance.Goals.Count} Sparziele")" />
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <StatCard Title="Noch offen" Value="@Money(Finance.Goals.Sum(g => Math.Max(0, g.TargetAmount - g.CurrentAmount)))" Icon="@Icons.Material.Filled.Flag" IconColor="Color.Warning" />
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <StatCard Title="Nötige Sparrate / Monat" Value="@Money(Finance.Goals.Sum(g => MonthlyRate(g) ?? 0))" Icon="@Icons.Material.Filled.CalendarMonth" IconColor="Color.Info"
+                      Caption="für alle Ziele mit Zieldatum" />
+        </MudItem>
+    </MudGrid>
+
+    @if (!Finance.Goals.Any())
+    {
+        <EmptyState Icon="@Icons.Material.Filled.Savings" Title="Noch keine Sparziele" Text="Urlaub, Notgroschen, neues Auto – lege ein Ziel an und verfolge deinen Fortschritt.">
+            @if (Finance.CanEdit)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OpenCreate">Erstes Sparziel anlegen</MudButton>
+            }
+        </EmptyState>
+    }
+    else
+    {
+        <MudGrid>
+            @foreach (var goal in Finance.Goals)
+            {
+                var pct = goal.TargetAmount > 0 ? (double)(goal.CurrentAmount / goal.TargetAmount * 100) : 0;
+                var done = goal.CurrentAmount >= goal.TargetAmount;
+                var rate = MonthlyRate(goal);
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Outlined="true" Elevation="0" Style="height: 100%;">
+                        <MudCardHeader>
+                            <CardHeaderAvatar>
+                                <MudAvatar Color="@ParseColor(goal.Color)" Variant="Variant.Filled"><MudIcon Icon="@Icon(goal.Icon)" /></MudAvatar>
+                            </CardHeaderAvatar>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.subtitle1">@goal.Name</MudText>
+                                <MudText Typo="Typo.caption">
+                                    @(goal.TargetDate.HasValue ? $"Ziel bis {Date(goal.TargetDate.Value)}" : "Ohne Zieldatum")
+                                </MudText>
+                            </CardHeaderContent>
+                            <CardHeaderActions>
+                                @if (Finance.CanEdit)
+                                {
+                                    <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true">
+                                        <MudMenuItem Icon="@Icons.Material.Filled.Edit" OnClick="@(() => OpenEdit(goal))">Bearbeiten</MudMenuItem>
+                                        <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" OnClick="@(() => Delete(goal))">Löschen</MudMenuItem>
+                                    </MudMenu>
+                                }
+                            </CardHeaderActions>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <div class="d-flex justify-center mb-3">
+                                <div style="position: relative; display: inline-flex;">
+                                    <MudProgressCircular Value="@Math.Min(pct, 100)" Color="@(done ? Color.Success : ParseColor(goal.Color))" Size="Size.Large" StrokeWidth="5" />
+                                    <MudText Typo="Typo.subtitle2" Style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;">
+                                        @pct.ToString("0")%
+                                    </MudText>
+                                </div>
+                            </div>
+                            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                <MudText Typo="Typo.body2">Angespart</MudText>
+                                <MudText Typo="Typo.body2"><strong>@Money(goal.CurrentAmount)</strong></MudText>
+                            </MudStack>
+                            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                <MudText Typo="Typo.body2">Ziel</MudText>
+                                <MudText Typo="Typo.body2">@Money(goal.TargetAmount)</MudText>
+                            </MudStack>
+                            @if (done)
+                            {
+                                <MudChip T="string" Color="Color.Success" Icon="@Icons.Material.Filled.EmojiEvents" Size="Size.Small" Class="mt-2">Ziel erreicht!</MudChip>
+                            }
+                            else if (rate.HasValue)
+                            {
+                                <MudText Typo="Typo.caption" Class="mt-2 d-block" Color="@(goal.TargetDate < DateTime.Today ? Color.Error : Color.Default)">
+                                    @(goal.TargetDate < DateTime.Today ? "Zieldatum überschritten – noch " + Money(goal.TargetAmount - goal.CurrentAmount) + " offen" : $"Nötig: {Money(rate.Value)} pro Monat")
+                                </MudText>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(goal.Notes))
+                            {
+                                <MudText Typo="Typo.caption" Class="d-block mt-1"><em>@goal.Notes</em></MudText>
+                            }
+                        </MudCardContent>
+                        @if (Finance.CanEdit)
+                        {
+                            <MudCardActions>
+                                <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" Color="Color.Success" OnClick="@(() => OpenContribution(goal, deposit: true))">Einzahlen</MudButton>
+                                <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Remove" OnClick="@(() => OpenContribution(goal, deposit: false))" Disabled="@(goal.CurrentAmount <= 0)">Entnehmen</MudButton>
+                            </MudCardActions>
+                        }
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+</MudContainer>
+
+@* ── Ziel anlegen / bearbeiten ── *@
+<MudDialog @bind-Visible="_dialogOpen" Options="@(new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true })">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(_isEdit ? "Sparziel bearbeiten" : "Neues Sparziel")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="_valid">
+            <MudStack Spacing="3">
+                <MudTextField @bind-Value="_model.Name" Label="Bezeichnung" Variant="Variant.Outlined" Required="true" RequiredError="Pflichtfeld" Immediate="true" />
+                <MudStack Row="true" Spacing="2">
+                    <MudNumericField @bind-Value="_model.TargetAmount" Label="Zielbetrag" Variant="Variant.Outlined" Format="N2" Culture="@De" HideSpinButtons="true"
+                                     Adornment="Adornment.Start" AdornmentText="€"
+                                     Validation="@(new Func<decimal, string?>(v => v > 0 ? null : "Zielbetrag muss größer als 0 sein"))" />
+                    <MudNumericField @bind-Value="_model.CurrentAmount" Label="Bereits angespart" Variant="Variant.Outlined" Format="N2" Culture="@De" HideSpinButtons="true"
+                                     Adornment="Adornment.Start" AdornmentText="€" Min="0m" />
+                </MudStack>
+                <MudDatePicker @bind-Date="_model.TargetDate" Label="Zieldatum (optional)" Variant="Variant.Outlined" DateFormat="dd.MM.yyyy" Culture="@De"
+                               FirstDayOfWeek="DayOfWeek.Monday" Clearable="true" />
+                <MudStack Row="true" Spacing="2">
+                    <MudSelect @bind-Value="_model.Icon" Label="Symbol" Variant="Variant.Outlined">
+                        @foreach (var (label, icon) in CategoryIcons)
+                        {
+                            <MudSelectItem Value="@label">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2"><MudIcon Icon="@icon" Size="Size.Small" /><MudText>@label</MudText></MudStack>
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudSelect @bind-Value="_model.Color" Label="Farbe" Variant="Variant.Outlined">
+                        @foreach (var (key, label, color) in ColorOptions)
+                        {
+                            <MudSelectItem Value="@key">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2"><MudIcon Icon="@Icons.Material.Filled.Circle" Color="@color" Size="Size.Small" /><MudText>@label</MudText></MudStack>
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudStack>
+                <MudTextField @bind-Value="_model.Notes" Label="Notiz" Variant="Variant.Outlined" Lines="2" />
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _dialogOpen = false)">Abbrechen</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save">Speichern</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ── Ein-/Auszahlung ── *@
+<MudDialog @bind-Visible="_contributionOpen" Options="@(new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseOnEscapeKey = true })">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(_deposit ? "Einzahlung" : "Entnahme") – @_contributionGoal?.Name</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudNumericField @bind-Value="_contributionAmount" Label="Betrag" Variant="Variant.Outlined" Format="N2" Culture="@De" HideSpinButtons="true"
+                             Adornment="Adornment.Start" AdornmentText="€" Min="0m" AutoFocus="true" />
+            @if (_deposit && Finance.ActiveAccounts.Count() > 1)
+            {
+                <MudCheckBox T="bool" @bind-Value="_bookTransfer" Label="Als Umbuchung zwischen Konten erfassen" />
+                @if (_bookTransfer)
+                {
+                    <MudSelect T="Guid" @bind-Value="_fromAccount" Label="Von Konto" Variant="Variant.Outlined" Margin="Margin.Dense">
+                        @foreach (var a in Finance.ActiveAccounts) { <MudSelectItem Value="@a.Id">@a.Name</MudSelectItem> }
+                    </MudSelect>
+                    <MudSelect T="Guid" @bind-Value="_toAccount" Label="Auf Konto" Variant="Variant.Outlined" Margin="Margin.Dense">
+                        @foreach (var a in Finance.ActiveAccounts.Where(a => a.Id != _fromAccount)) { <MudSelectItem Value="@a.Id">@a.Name</MudSelectItem> }
+                    </MudSelect>
+                }
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _contributionOpen = false)">Abbrechen</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_contributionAmount <= 0)" OnClick="SaveContribution">Buchen</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private bool _dialogOpen;
+    private bool _isEdit;
+    private bool _valid;
+    private MudForm? _form;
+    private SavingsGoal _model = new();
+
+    private bool _contributionOpen;
+    private bool _deposit;
+    private SavingsGoal? _contributionGoal;
+    private decimal _contributionAmount;
+    private bool _bookTransfer;
+    private Guid _fromAccount;
+    private Guid _toAccount;
+
+    /// <summary>Monatliche Sparrate, um das Ziel bis zum Zieldatum zu erreichen.</summary>
+    private static decimal? MonthlyRate(SavingsGoal goal)
+    {
+        if (!goal.TargetDate.HasValue || goal.CurrentAmount >= goal.TargetAmount) return null;
+        var today = DateTime.Today;
+        var months = (goal.TargetDate.Value.Year - today.Year) * 12 + goal.TargetDate.Value.Month - today.Month;
+        return Math.Round((goal.TargetAmount - goal.CurrentAmount) / Math.Max(1, months), 2);
+    }
+
+    private void OpenCreate()
+    {
+        _model = new SavingsGoal { Icon = "Sparen", Color = "Success" };
+        _isEdit = false;
+        _dialogOpen = true;
+    }
+
+    private void OpenEdit(SavingsGoal goal)
+    {
+        _model = goal.Clone();
+        _isEdit = true;
+        _dialogOpen = true;
+    }
+
+    private async Task Save()
+    {
+        if (_form != null) await _form.Validate();
+        if (_form?.IsValid != true) return;
+        if (await Finance.SaveGoalAsync(_model))
+        {
+            Snackbar.Add("Sparziel gespeichert.", Severity.Success);
+            _dialogOpen = false;
+        }
+    }
+
+    private async Task Delete(SavingsGoal goal)
+    {
+        if (!await ConfirmAsync("Sparziel löschen", $"Soll das Sparziel <strong>{goal.Name}</strong> gelöscht werden?")) return;
+        if (await Finance.DeleteGoalAsync(goal.Id))
+            Snackbar.Add("Sparziel gelöscht.", Severity.Success);
+    }
+
+    private void OpenContribution(SavingsGoal goal, bool deposit)
+    {
+        _contributionGoal = goal;
+        _deposit = deposit;
+        _contributionAmount = 0;
+        _bookTransfer = false;
+        var accounts = Finance.ActiveAccounts.ToList();
+        _fromAccount = accounts.FirstOrDefault(a => a.Type == AccountType.Girokonto)?.Id ?? accounts.FirstOrDefault()?.Id ?? Guid.Empty;
+        _toAccount = accounts.FirstOrDefault(a => a.Type is AccountType.Sparkonto or AccountType.Tagesgeld && a.Id != _fromAccount)?.Id
+                     ?? accounts.FirstOrDefault(a => a.Id != _fromAccount)?.Id ?? Guid.Empty;
+        _contributionOpen = true;
+    }
+
+    private async Task SaveContribution()
+    {
+        if (_contributionGoal == null || _contributionAmount <= 0) return;
+        var amount = _deposit ? _contributionAmount : -Math.Min(_contributionAmount, _contributionGoal.CurrentAmount);
+        if (!await Finance.ContributeToGoalAsync(_contributionGoal.Id, amount)) return;
+
+        if (_deposit && _bookTransfer && _fromAccount != Guid.Empty && _toAccount != Guid.Empty && _fromAccount != _toAccount)
+        {
+            await Finance.SaveTransactionAsync(new Transaction
+            {
+                Type = TransactionType.Umbuchung,
+                AccountId = _fromAccount,
+                ToAccountId = _toAccount,
+                Amount = _contributionAmount,
+                Description = $"Sparziel: {_contributionGoal.Name}",
+                Date = DateTime.Today
+            });
+        }
+
+        var goal = Finance.Goals.First(g => g.Id == _contributionGoal.Id);
+        Snackbar.Add(goal.CurrentAmount >= goal.TargetAmount && _deposit
+            ? $"🎉 Sparziel „{goal.Name}“ erreicht!"
+            : $"{Money(Math.Abs(amount))} {(_deposit ? "eingezahlt" : "entnommen")}.", Severity.Success);
+        _contributionOpen = false;
+    }
+}

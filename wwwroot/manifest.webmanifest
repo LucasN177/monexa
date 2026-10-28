@@ -1,22 +1,26 @@
 {
-  "name": "monexa",
-  "short_name": "monexa",
+  "name": "MonExA – Money, Expenses & Analysis",
+  "short_name": "MonExA",
+  "description": "Finanzen über mehrere Projekte hinweg verwalten.",
   "id": "./",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#ffffff",
+  "lang": "de",
+  "background_color": "#121212",
   "theme_color": "#03173d",
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "icon-512.png",
+      "src": "Resources/MonexaIcon.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "1024x1024",
+      "purpose": "any"
     },
     {
-      "src": "icon-192.png",
+      "src": "Resources/MonexaIconTransparentWhite.png",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "1024x1024",
+      "purpose": "maskable"
     }
   ]
 }

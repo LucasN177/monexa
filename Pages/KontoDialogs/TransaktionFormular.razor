@@ -1,0 +1,470 @@
+@page "/transaktionen/neu"
+@page "/transaktionen/{Id:guid}/bearbeiten"
+@inherits FinancePage
+
+<PageTitle>@(IsEdit ? "Transaktion bearbeiten" : "Neue Transaktion") – MonExA</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4 mb-8">
+    @if (transaction == null)
+    {
+        <EmptyState Title="Transaktion nicht gefunden" Text="Die Transaktion existiert nicht (mehr) oder gehört zu einem anderen Projekt.">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="transaktionen">Zur Übersicht</MudButton>
+        </EmptyState>
+    }
+    else if (!Finance.Accounts.Any())
+    {
+        <EmptyState Icon="@Icons.Material.Filled.AccountBalance" Title="Noch kein Konto vorhanden" Text="Lege zuerst ein Konto an, auf das gebucht werden kann.">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="konten/neu">Konto anlegen</MudButton>
+        </EmptyState>
+    }
+    else
+    {
+        <PageHeader Title="@(IsEdit ? "Transaktion bearbeiten" : "Neue Transaktion")" BackHref="transaktionen">
+            <Actions>
+                @if (transaction.RecurringId != null)
+                {
+                    <MudChip T="string" Icon="@Icons.Material.Filled.EventRepeat" Color="Color.Info" Size="Size.Small" Href="dauerauftraege">Aus Dauerauftrag</MudChip>
+                }
+            </Actions>
+        </PageHeader>
+
+        <!-- Typ-Auswahl (Schnellwahl) -->
+        <MudPaper Class="pa-4 mb-4" Elevation="0" Outlined="true">
+            <MudText Typo="Typo.h6" Class="mb-3">Transaktionstyp</MudText>
+            <MudStack Row="true" Spacing="2">
+                @foreach (var type in Enum.GetValues<TransactionType>())
+                {
+                    var t = type;
+                    <MudPaper Outlined="true" Elevation="0" Class="flex-grow-1 pa-3 mud-ripple"
+                              Style="@($"text-align: center; cursor: pointer; {GetTypeCardStyle(t)}")"
+                              @onclick="@(() => SetType(t))">
+                        <MudIcon Icon="@TransactionTypeIcon(t)" Color="@TransactionTypeColor(t)" Size="Size.Large" />
+                        <MudText Typo="Typo.body1"><strong>@t</strong></MudText>
+                    </MudPaper>
+                }
+            </MudStack>
+        </MudPaper>
+
+        <!-- Formular -->
+        <MudPaper Class="pa-6" Elevation="0" Outlined="true">
+            <MudForm @ref="form" @bind-IsValid="formValid" ReadOnly="@(!Finance.CanEdit)">
+                <MudGrid Spacing="3">
+                    <!-- Basis-Informationen -->
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.h6" Class="mb-2">Basis-Informationen</MudText>
+                        <MudDivider />
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudAutocomplete T="string"
+                                         @bind-Value="transaction.Description"
+                                         SearchFunc="SearchDescriptions"
+                                         CoerceValue="true"
+                                         Label="Beschreibung"
+                                         Required="true"
+                                         RequiredError="Beschreibung ist erforderlich"
+                                         Variant="Variant.Outlined"
+                                         Adornment="Adornment.Start"
+                                         AdornmentIcon="@Icons.Material.Filled.Description"
+                                         HelperText="z.B. REWE Einkauf, Gehalt, Miete"
+                                         OnBlur="SuggestCategory"
+                                         MaxItems="8"
+                                         ResetValueOnEmptyText="false" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudNumericField @bind-Value="transaction.Amount"
+                                         Label="Betrag"
+                                         Required="true"
+                                         RequiredError="Betrag ist erforderlich"
+                                         Validation="@(new Func<decimal, string?>(a => a > 0 ? null : "Betrag muss größer als 0 sein"))"
+                                         Min="0m"
+                                         Format="N2"
+                                         Culture="@De"
+                                         HideSpinButtons="true"
+                                         Variant="Variant.Outlined"
+                                         Adornment="Adornment.Start"
+                                         AdornmentText="€"
+                                         HelperText="Betrag ohne Vorzeichen" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudDatePicker @bind-Date="transactionDate"
+                                       Label="Datum"
+                                       Required="true"
+                                       Variant="Variant.Outlined"
+                                       Adornment="Adornment.Start"
+                                       AdornmentIcon="@Icons.Material.Filled.CalendarToday"
+                                       DateFormat="dd.MM.yyyy"
+                                       Culture="@De"
+                                       FirstDayOfWeek="DayOfWeek.Monday" />
+                    </MudItem>
+
+                    @if (transaction.Type != TransactionType.Umbuchung)
+                    {
+                        <!-- Kategorie -->
+                        <MudItem xs="12" Class="mt-4">
+                            <MudText Typo="Typo.h6" Class="mb-2">Kategorie</MudText>
+                            <MudDivider />
+                        </MudItem>
+
+                        <MudItem xs="12">
+                            <MudSelect T="Guid?" @bind-Value="transaction.CategoryId"
+                                       Label="Kategorie"
+                                       Variant="Variant.Outlined"
+                                       Clearable="true"
+                                       AnchorOrigin="Origin.BottomCenter"
+                                       HelperText="@(suggested ? "Vorschlag anhand früherer Buchungen" : "Nur passende Kategorien des gewählten Typs")">
+                                @foreach (var category in GetAvailableCategories())
+                                {
+                                    <MudSelectItem T="Guid?" Value="@category.Id">
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                            <MudIcon Icon="@Icon(category.Icon)" Size="Size.Small" Color="@ParseColor(category.Color)" />
+                                            <MudText>@category.Name</MudText>
+                                        </MudStack>
+                                    </MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                    }
+
+                    <!-- Konten -->
+                    <MudItem xs="12" Class="mt-4">
+                        <MudText Typo="Typo.h6" Class="mb-2">
+                            @(transaction.Type == TransactionType.Umbuchung ? "Von/Nach Konto" : "Konto")
+                        </MudText>
+                        <MudDivider />
+                    </MudItem>
+
+                    <MudItem xs="12" md="@(transaction.Type == TransactionType.Umbuchung ? 6 : 12)">
+                        <MudSelect T="Guid" @bind-Value="transaction.AccountId"
+                                   Label="@(transaction.Type == TransactionType.Umbuchung ? "Von Konto" : "Konto")"
+                                   Required="true"
+                                   Validation="@(new Func<Guid, string?>(id => id == Guid.Empty ? "Konto ist erforderlich" : null))"
+                                   Variant="Variant.Outlined"
+                                   Adornment="Adornment.Start"
+                                   AdornmentIcon="@Icons.Material.Filled.AccountBalance">
+                            @foreach (var account in SelectableAccounts)
+                            {
+                                <MudSelectItem T="Guid" Value="@account.Id">
+                                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                        <MudText>@account.Name</MudText>
+                                        <MudText Typo="Typo.caption">@Money(account.Balance)</MudText>
+                                    </MudStack>
+                                </MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    @if (transaction.Type == TransactionType.Umbuchung)
+                    {
+                        <MudItem xs="12" md="6">
+                            <MudSelect T="Guid?" @bind-Value="transaction.ToAccountId"
+                                       Label="Nach Konto"
+                                       Required="true"
+                                       RequiredError="Zielkonto ist erforderlich"
+                                       Validation="@(new Func<Guid?, string?>(id => id == transaction.AccountId ? "Zielkonto muss sich vom Quellkonto unterscheiden" : null))"
+                                       Variant="Variant.Outlined"
+                                       Adornment="Adornment.Start"
+                                       AdornmentIcon="@Icons.Material.Filled.AccountBalance">
+                                @foreach (var account in SelectableAccounts.Where(a => a.Id != transaction.AccountId))
+                                {
+                                    <MudSelectItem T="Guid?" Value="@account.Id">@account.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                    }
+
+                    <!-- Notizen -->
+                    <MudItem xs="12" Class="mt-4">
+                        <MudText Typo="Typo.h6" Class="mb-2">Zusätzliche Informationen</MudText>
+                        <MudDivider />
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="transaction.Notes"
+                                      Label="Notizen"
+                                      Lines="3"
+                                      Variant="Variant.Outlined"
+                                      HelperText="Optional: Zusätzliche Informationen zur Transaktion" />
+                    </MudItem>
+
+                    @if (!IsEdit && Finance.CanEdit)
+                    {
+                        <MudItem xs="12" md="6">
+                            <MudSwitch T="bool" @bind-Value="makeRecurring" Color="Color.Info" Label="Als Dauerauftrag wiederholen" />
+                        </MudItem>
+                        @if (makeRecurring)
+                        {
+                            <MudItem xs="12" md="6">
+                                <MudSelect T="RecurrenceInterval" @bind-Value="recurrenceInterval" Label="Intervall" Variant="Variant.Outlined" Margin="Margin.Dense">
+                                    @foreach (var interval in Enum.GetValues<RecurrenceInterval>())
+                                    {
+                                        <MudSelectItem Value="@interval">@IntervalText(interval)</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                        }
+                    }
+
+                    <!-- Vorschau Card -->
+                    <MudItem xs="12" Class="mt-4">
+                        <MudCard Outlined="true" Elevation="0">
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudText Typo="Typo.h6">Vorschau</MudText>
+                                </CardHeaderContent>
+                                <CardHeaderActions>
+                                    <MudChip T="string" Color="@TransactionTypeColor(transaction.Type)" Variant="Variant.Filled">
+                                        @transaction.Type
+                                    </MudChip>
+                                </CardHeaderActions>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                <MudGrid>
+                                    <MudItem xs="6">
+                                        <MudText Typo="Typo.caption">Beschreibung</MudText>
+                                        <MudText Typo="Typo.body1">
+                                            <strong>@(string.IsNullOrEmpty(transaction.Description) ? "-" : transaction.Description)</strong>
+                                        </MudText>
+                                    </MudItem>
+                                    <MudItem xs="6" Style="text-align: right;">
+                                        <MudText Typo="Typo.caption">Betrag</MudText>
+                                        <MudText Typo="Typo.h5" Color="@TransactionTypeColor(transaction.Type)">
+                                            @GetPreviewAmount()
+                                        </MudText>
+                                    </MudItem>
+                                    <MudItem xs="6">
+                                        <MudText Typo="Typo.caption">Datum</MudText>
+                                        <MudText Typo="Typo.body2">@(transactionDate.HasValue ? Date(transactionDate.Value) : "-")</MudText>
+                                    </MudItem>
+                                    <MudItem xs="6" Style="text-align: right;">
+                                        <MudText Typo="Typo.caption">Neuer Kontostand</MudText>
+                                        <MudText Typo="Typo.body2">@Money(PreviewBalance)</MudText>
+                                    </MudItem>
+                                </MudGrid>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                </MudGrid>
+            </MudForm>
+        </MudPaper>
+
+        @if (Finance.CanEdit)
+        {
+            <!-- Action Buttons - Fixed am unteren Rand für mobile -->
+            <MudPaper Class="pa-4 mt-4" Elevation="4" Style="position: sticky; bottom: 0; z-index: 10;">
+                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Default"
+                               StartIcon="@Icons.Material.Filled.Cancel"
+                               OnClick="@(() => Navigation.NavigateTo("transaktionen"))">
+                        Abbrechen
+                    </MudButton>
+                    <MudStack Row="true" Spacing="2">
+                        @if (IsEdit)
+                        {
+                            <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteTransaction">
+                                Löschen
+                            </MudButton>
+                        }
+                        else
+                        {
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="@(() => SaveTransaction(addAnother: true))" Disabled="@saving"
+                                       Class="d-none d-sm-flex">
+                                Speichern & weitere
+                            </MudButton>
+                        }
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Save"
+                                   OnClick="@(() => SaveTransaction(addAnother: false))"
+                                   Disabled="@saving">
+                            @(IsEdit ? "Speichern" : "Transaktion erstellen")
+                        </MudButton>
+                    </MudStack>
+                </MudStack>
+            </MudPaper>
+        }
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+    [SupplyParameterFromQuery(Name = "konto")] public Guid? AccountQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "vorlage")] public Guid? TemplateQuery { get; set; }
+
+    private bool IsEdit => Id.HasValue;
+    private Transaction? transaction;
+    private Transaction? original;
+    private DateTime? transactionDate = DateTime.Today;
+    private MudForm? form;
+    private bool formValid;
+    private bool saving;
+    private bool suggested;
+    private bool makeRecurring;
+    private RecurrenceInterval recurrenceInterval = RecurrenceInterval.Monatlich;
+
+    private IEnumerable<Konto> SelectableAccounts =>
+        Finance.Accounts.Where(a => a.IsActive || a.Id == transaction?.AccountId || a.Id == transaction?.ToAccountId);
+
+    protected override void OnParametersSet()
+    {
+        if (IsEdit)
+        {
+            original = Finance.GetTransaction(Id!.Value);
+            transaction = original?.Clone();
+        }
+        else
+        {
+            var template = TemplateQuery.HasValue ? Finance.GetTransaction(TemplateQuery.Value) : null;
+            transaction = template != null
+                ? template.Clone()
+                : new Transaction
+                {
+                    Type = TransactionType.Ausgabe,
+                    AccountId = AccountQuery ?? Finance.ActiveAccounts.FirstOrDefault()?.Id ?? Guid.Empty
+                };
+            transaction.Id = Guid.NewGuid();
+            transaction.RecurringId = null;
+            transaction.Date = DateTime.Today;
+            transaction.CreatedAt = DateTime.UtcNow;
+        }
+        transactionDate = transaction?.Date;
+    }
+
+    private void SetType(TransactionType type)
+    {
+        if (transaction == null || transaction.Type == type || !Finance.CanEdit) return;
+        transaction.Type = type;
+        var category = Finance.GetCategory(transaction.CategoryId);
+        if (category != null && !Matches(category, type)) transaction.CategoryId = null;
+        if (type != TransactionType.Umbuchung) transaction.ToAccountId = null;
+        suggested = false;
+    }
+
+    private static bool Matches(Category category, TransactionType type) =>
+        type == TransactionType.Einnahme ? category.Type == CategoryType.Einnahme : category.Type == CategoryType.Ausgabe;
+
+    private IEnumerable<Category> GetAvailableCategories() =>
+        Finance.Categories.Where(c => (c.IsActive || c.Id == transaction?.CategoryId) && Matches(c, transaction!.Type));
+
+    private Task<IEnumerable<string>> SearchDescriptions(string value, CancellationToken token)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return Task.FromResult(Enumerable.Empty<string>());
+        var result = Finance.Transactions
+            .Where(t => t.Description.Contains(value, StringComparison.OrdinalIgnoreCase))
+            .GroupBy(t => t.Description)
+            .OrderByDescending(g => g.Count())
+            .Select(g => g.Key)
+            .Take(8);
+        return Task.FromResult(result);
+    }
+
+    private void SuggestCategory()
+    {
+        if (transaction == null || transaction.CategoryId != null || transaction.Type == TransactionType.Umbuchung) return;
+        var suggestion = Finance.SuggestCategory(transaction.Description, transaction.Type);
+        if (suggestion != null)
+        {
+            transaction.CategoryId = suggestion;
+            suggested = true;
+        }
+    }
+
+    private string GetTypeCardStyle(TransactionType type)
+    {
+        if (transaction?.Type != type) return "";
+        var color = type switch
+        {
+            TransactionType.Einnahme => "var(--mud-palette-success)",
+            TransactionType.Ausgabe => "var(--mud-palette-error)",
+            _ => "var(--mud-palette-info)"
+        };
+        return $"border: 2px solid {color};";
+    }
+
+    private string GetPreviewAmount()
+    {
+        if (transaction == null || transaction.Amount == 0) return Money(0);
+        return transaction.Type switch
+        {
+            TransactionType.Einnahme => "+ " + Money(transaction.Amount),
+            TransactionType.Ausgabe => "- " + Money(transaction.Amount),
+            _ => Money(transaction.Amount)
+        };
+    }
+
+    /// <summary>Kontostand des (Quell-)Kontos nach dem Speichern.</summary>
+    private decimal PreviewBalance
+    {
+        get
+        {
+            if (transaction == null) return 0;
+            var balance = Finance.GetAccount(transaction.AccountId)?.Balance ?? 0;
+            if (original != null) balance -= FinanceState.SignedAmountFor(original, transaction.AccountId);
+            return balance + FinanceState.SignedAmountFor(transaction, transaction.AccountId);
+        }
+    }
+
+    private async Task SaveTransaction(bool addAnother)
+    {
+        if (transaction == null || form == null) return;
+        await form.Validate();
+        if (!form.IsValid || !transactionDate.HasValue) return;
+
+        saving = true;
+        transaction.Date = transactionDate.Value.Date;
+        transaction.Description = transaction.Description.Trim();
+        var ok = await Finance.SaveTransactionAsync(transaction);
+
+        if (ok && makeRecurring && !IsEdit)
+        {
+            var recurring = new RecurringTransaction
+            {
+                AccountId = transaction.AccountId,
+                ToAccountId = transaction.ToAccountId,
+                CategoryId = transaction.CategoryId,
+                Description = transaction.Description,
+                Amount = transaction.Amount,
+                Type = transaction.Type,
+                Interval = recurrenceInterval,
+            };
+            recurring.NextDue = FinanceState.NextOccurrence(recurring, transaction.Date);
+            ok = await Finance.SaveRecurringAsync(recurring);
+            if (ok)
+            {
+                transaction.RecurringId = recurring.Id;
+                await Finance.SaveTransactionAsync(transaction);
+            }
+        }
+        saving = false;
+        if (!ok) return;
+
+        Snackbar.Add(IsEdit ? "Transaktion aktualisiert." : "Transaktion erstellt.", Severity.Success);
+        if (addAnother)
+        {
+            var keepAccount = transaction.AccountId;
+            var keepType = transaction.Type;
+            transaction = new Transaction { Type = keepType, AccountId = keepAccount, Date = transaction.Date };
+            makeRecurring = false;
+            suggested = false;
+            StateHasChanged();
+        }
+        else
+        {
+            Navigation.NavigateTo("transaktionen");
+        }
+    }
+
+    private async Task DeleteTransaction()
+    {
+        if (transaction == null) return;
+        if (!await ConfirmAsync("Transaktion löschen", $"Soll die Transaktion <strong>{transaction.Description}</strong> wirklich gelöscht werden?"))
+            return;
+        if (await Finance.DeleteTransactionAsync(transaction.Id))
+        {
+            Snackbar.Add("Transaktion gelöscht.", Severity.Success);
+            Navigation.NavigateTo("transaktionen");
+        }
+    }
+}

@@ -1,0 +1,440 @@
+@page "/berichte"
+@page "/berichte/{Mode}"
+@inherits FinancePage
+@inject ExportService Export
+@inject IJSRuntime JS
+
+<PageTitle>Berichte – MonExA</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-8">
+    <PageHeader Title="@Title" Icon="@Icons.Material.Filled.Assessment" Subtitle="@Finance.CurrentProject?.Name">
+        <Actions>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Print" OnClick="Print" Class="no-print">Drucken</MudButton>
+            @if (CurrentMode != "vergleich")
+            {
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportPeriod" Class="no-print">CSV</MudButton>
+            }
+        </Actions>
+    </PageHeader>
+
+    <MudTabs ActivePanelIndex="@TabIndex" ActivePanelIndexChanged="OnTabChanged" Elevation="0" Rounded="true" ApplyEffectsToContainer="true" Class="mb-4 no-print">
+        <MudTabPanel Text="Monatsbericht" Icon="@Icons.Material.Filled.CalendarMonth" />
+        <MudTabPanel Text="Jahresbericht" Icon="@Icons.Material.Filled.CalendarToday" />
+        <MudTabPanel Text="Vergleiche" Icon="@Icons.Material.Filled.CompareArrows" />
+    </MudTabs>
+
+    @switch (CurrentMode)
+    {
+        case "jahr":
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-4">
+                <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Variant="Variant.Outlined" Size="Size.Small" OnClick="@(() => _year--)" />
+                <MudText Typo="Typo.h6" Style="min-width: 80px; text-align: center;">@_year</MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Variant="Variant.Outlined" Size="Size.Small" OnClick="@(() => _year++)" Disabled="@(_year >= DateTime.Today.Year)" />
+            </MudStack>
+            @YearReport()
+            break;
+
+        case "vergleich":
+            @ComparisonReport()
+            break;
+
+        default:
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-4">
+                <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Variant="Variant.Outlined" Size="Size.Small" OnClick="@(() => _month = _month.AddMonths(-1))" />
+                <MudText Typo="Typo.h6" Style="min-width: 160px; text-align: center;">@MonthYear(_month)</MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Variant="Variant.Outlined" Size="Size.Small" OnClick="@(() => _month = _month.AddMonths(1))"
+                               Disabled="@(_month >= FinanceState.MonthStart(DateTime.Today))" />
+            </MudStack>
+            @MonthReport()
+            break;
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public string? Mode { get; set; }
+
+    private DateTime _month = FinanceState.MonthStart(DateTime.Today);
+    private int _year = DateTime.Today.Year;
+
+    private DateTime? _compareA = FinanceState.MonthStart(DateTime.Today).AddMonths(-1);
+    private DateTime? _compareB = FinanceState.MonthStart(DateTime.Today);
+    private string _compareUnit = "monat";
+
+    private readonly ChartOptions _chartOptions = new() { YAxisFormat = "N0", MaxNumYAxisTicks = 8 };
+
+    private string CurrentMode => Mode?.ToLowerInvariant() switch
+    {
+        "jahr" => "jahr",
+        "vergleich" => "vergleich",
+        _ => "monat"
+    };
+
+    private int TabIndex => CurrentMode switch { "jahr" => 1, "vergleich" => 2, _ => 0 };
+
+    private string Title => CurrentMode switch
+    {
+        "jahr" => "Jahresbericht",
+        "vergleich" => "Vergleiche",
+        _ => "Monatsbericht"
+    };
+
+    private void OnTabChanged(int index) =>
+        Navigation.NavigateTo(index switch { 1 => "berichte/jahr", 2 => "berichte/vergleich", _ => "berichte/monat" });
+
+    private async Task Print() => await JS.InvokeVoidAsync("print");
+
+    private async Task ExportPeriod()
+    {
+        var (from, to) = CurrentMode == "jahr"
+            ? (new DateTime(_year, 1, 1), new DateTime(_year + 1, 1, 1))
+            : (_month, _month.AddMonths(1));
+        await Export.ExportTransactionsAsync(Finance.InRange(from, to));
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // Gemeinsame Bausteine
+    // ═════════════════════════════════════════════════════════════════════════
+
+    private record Summary(decimal Income, decimal Expenses, decimal Transfers, int Count)
+    {
+        public decimal Net => Income - Expenses;
+        public double SavingsRate => Income > 0 ? (double)(Net / Income * 100) : 0;
+    }
+
+    private Summary Summarize(DateTime from, DateTime to)
+    {
+        var items = Finance.InRange(from, to).ToList();
+        return new Summary(
+            items.Where(t => t.Type == TransactionType.Einnahme).Sum(t => t.Amount),
+            items.Where(t => t.Type == TransactionType.Ausgabe).Sum(t => t.Amount),
+            items.Where(t => t.Type == TransactionType.Umbuchung).Sum(t => t.Amount),
+            items.Count);
+    }
+
+    private RenderFragment SummaryCards(Summary s, Summary? previous, string previousLabel) => __builder =>
+    {
+        <MudGrid Class="mb-4">
+            <MudItem xs="6" md="3">
+                <StatCard Title="Einnahmen" Value="@Money(s.Income)" ValueColor="Color.Success" Caption="@(previous != null ? Delta(s.Income, previous.Income, previousLabel) : null)" />
+            </MudItem>
+            <MudItem xs="6" md="3">
+                <StatCard Title="Ausgaben" Value="@Money(s.Expenses)" ValueColor="Color.Error" Caption="@(previous != null ? Delta(s.Expenses, previous.Expenses, previousLabel) : null)" />
+            </MudItem>
+            <MudItem xs="6" md="3">
+                <StatCard Title="Überschuss" Value="@Money(s.Net)" ValueColor="@(s.Net >= 0 ? Color.Success : Color.Error)" Caption="@($"{s.Count} Buchungen")" />
+            </MudItem>
+            <MudItem xs="6" md="3">
+                <StatCard Title="Sparquote" Value="@Percent(s.SavingsRate)" ValueColor="@(s.SavingsRate >= 10 ? Color.Success : Color.Warning)"
+                          Caption="@($"Umbuchungen: {Money(s.Transfers)}")" />
+            </MudItem>
+        </MudGrid>
+    };
+
+    private static string Delta(decimal current, decimal previous, string label)
+    {
+        if (previous == 0) return $"{label}: –";
+        var pct = (double)((current - previous) / previous * 100);
+        return $"{(pct >= 0 ? "+" : "")}{pct:0.0} % ggü. {label}";
+    }
+
+    private RenderFragment CategoryTable(string title, List<(Category? Category, decimal Amount)> rows, Func<Guid?, decimal>? previous, string? previousLabel, int months = 1) => __builder =>
+    {
+        var total = rows.Sum(r => r.Amount);
+        <MudPaper Elevation="0" Outlined="true" Class="pa-4 mb-4">
+            <MudText Typo="Typo.h6" Class="mb-2">@title</MudText>
+            @if (!rows.Any())
+            {
+                <MudText Typo="Typo.body2">Keine Buchungen im Zeitraum.</MudText>
+            }
+            else
+            {
+                <MudSimpleTable Dense="true" Hover="true" Style="overflow-x: auto;">
+                    <thead>
+                        <tr>
+                            <th>Kategorie</th>
+                            <th style="text-align: right;">Betrag</th>
+                            <th style="text-align: right;">Anteil</th>
+                            @if (months > 1) { <th style="text-align: right;">Ø Monat</th> }
+                            @if (previous != null) { <th style="text-align: right;">@previousLabel</th><th style="text-align: right;">Δ</th> }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var (category, amount) in rows)
+                        {
+                            var share = total > 0 ? (double)(amount / total * 100) : 0;
+                            <tr>
+                                <td>
+                                    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                                        <MudIcon Icon="@Icon(category?.Icon)" Size="Size.Small" Color="@ParseColor(category?.Color)" />
+                                        <span>@(category?.Name ?? "Ohne Kategorie")</span>
+                                    </MudStack>
+                                </td>
+                                <td style="text-align: right;">@Money(amount)</td>
+                                <td style="text-align: right; min-width: 110px;">
+                                    <MudStack Spacing="0">
+                                        <span>@share.ToString("0.0") %</span>
+                                        <MudProgressLinear Value="@share" Size="Size.Small" Color="@ParseColor(category?.Color)" Rounded="true" />
+                                    </MudStack>
+                                </td>
+                                @if (months > 1) { <td style="text-align: right;">@Money(amount / months)</td> }
+                                @if (previous != null)
+                                {
+                                    var prev = previous(category?.Id);
+                                    var diff = amount - prev;
+                                    <td style="text-align: right;">@Money(prev)</td>
+                                    <td style="text-align: right;">
+                                        <MudText Typo="Typo.body2" Color="@(diff > 0 ? Color.Error : diff < 0 ? Color.Success : Color.Default)">@SignedMoney(diff)</MudText>
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td><strong>Summe</strong></td>
+                            <td style="text-align: right;"><strong>@Money(total)</strong></td>
+                            <td></td>
+                            @if (months > 1) { <td style="text-align: right;"><strong>@Money(total / months)</strong></td> }
+                            @if (previous != null) { <td></td><td></td> }
+                        </tr>
+                    </tfoot>
+                </MudSimpleTable>
+            }
+        </MudPaper>
+    };
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // Monatsbericht
+    // ═════════════════════════════════════════════════════════════════════════
+
+    private RenderFragment MonthReport() => __builder =>
+    {
+        var from = _month;
+        var to = _month.AddMonths(1);
+        var prevFrom = _month.AddMonths(-1);
+        var summary = Summarize(from, to);
+        var previous = Summarize(prevFrom, from);
+        var prevExpenses = Finance.ExpensesByCategory(prevFrom, from).ToDictionary(x => x.Category?.Id ?? Guid.Empty, x => x.Amount);
+        var largest = Finance.InRange(from, to).Where(t => t.Type == TransactionType.Ausgabe).OrderByDescending(t => t.Amount).Take(10).ToList();
+        var endBalance = to > DateTime.Today ? DateTime.Today : to.AddDays(-1);
+
+        @SummaryCards(summary, previous, "Vormonat")
+
+        <MudGrid>
+            <MudItem xs="12" md="7">
+                @CategoryTable("Ausgaben nach Kategorie", Finance.ExpensesByCategory(from, to), id => prevExpenses.GetValueOrDefault(id ?? Guid.Empty), "Vormonat")
+                @CategoryTable("Einnahmen nach Kategorie", Finance.IncomeByCategory(from, to), null, null)
+            </MudItem>
+            <MudItem xs="12" md="5">
+                <MudPaper Elevation="0" Outlined="true" Class="pa-4 mb-4">
+                    <MudText Typo="Typo.h6" Class="mb-2">Größte Ausgaben</MudText>
+                    @foreach (var t in largest)
+                    {
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mb-1">
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.body2">@t.Description</MudText>
+                                <MudText Typo="Typo.caption">@Date(t.Date) · @Finance.CategoryName(t.CategoryId)</MudText>
+                            </MudStack>
+                            <MudText Typo="Typo.body2" Color="Color.Error">@Money(t.Amount)</MudText>
+                        </MudStack>
+                    }
+                    @if (!largest.Any()) { <MudText Typo="Typo.body2">Keine Ausgaben.</MudText> }
+                </MudPaper>
+
+                <MudPaper Elevation="0" Outlined="true" Class="pa-4 mb-4">
+                    <MudText Typo="Typo.h6" Class="mb-2">Konten zum @Date(endBalance)</MudText>
+                    @foreach (var account in Finance.ActiveAccounts)
+                    {
+                        var start = Finance.BalanceAt(account.Id, from.AddDays(-1));
+                        var end = Finance.BalanceAt(account.Id, endBalance);
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mb-1">
+                            <MudText Typo="Typo.body2">@account.Name</MudText>
+                            <MudStack Spacing="0" AlignItems="AlignItems.End">
+                                <MudText Typo="Typo.body2">@Money(end)</MudText>
+                                <MudText Typo="Typo.caption" Color="@(end - start >= 0 ? Color.Success : Color.Error)">@SignedMoney(end - start)</MudText>
+                            </MudStack>
+                        </MudStack>
+                    }
+                    <MudDivider Class="my-2" />
+                    <MudStack Row="true" Justify="Justify.SpaceBetween">
+                        <MudText Typo="Typo.subtitle2">Vermögen</MudText>
+                        <MudText Typo="Typo.subtitle2">@Money(Finance.NetWorthAt(endBalance))</MudText>
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    };
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // Jahresbericht
+    // ═════════════════════════════════════════════════════════════════════════
+
+    private RenderFragment YearReport() => __builder =>
+    {
+        var from = new DateTime(_year, 1, 1);
+        var to = from.AddYears(1);
+        var summary = Summarize(from, to);
+        var previous = Summarize(from.AddYears(-1), from);
+        var months = Enumerable.Range(0, 12).Select(i => from.AddMonths(i)).ToList();
+        var monthCount = _year == DateTime.Today.Year ? DateTime.Today.Month : 12;
+        var series = new List<ChartSeries>
+        {
+            new() { Name = "Einnahmen", Data = months.Select(m => (double)Finance.MonthIncome(m)).ToArray() },
+            new() { Name = "Ausgaben", Data = months.Select(m => (double)Finance.MonthExpenses(m)).ToArray() }
+        };
+        var labels = months.Select(m => m.ToString("MMM", De)).ToArray();
+        var startWorth = Finance.NetWorthAt(from.AddDays(-1));
+        var endWorth = Finance.NetWorthAt(to > DateTime.Today ? DateTime.Today : to.AddDays(-1));
+        decimal cumulative = 0;
+
+        @SummaryCards(summary, previous, "Vorjahr")
+
+        <MudPaper Elevation="0" Outlined="true" Class="pa-4 mb-4">
+            <MudStack Row="true" Justify="Justify.SpaceBetween" Wrap="Wrap.Wrap">
+                <MudText Typo="Typo.h6">Monatlicher Cashflow</MudText>
+                <MudText Typo="Typo.body2">
+                    Vermögen: @Money(startWorth) → <strong>@Money(endWorth)</strong>
+                    (<span style="color: var(--mud-palette-@(endWorth >= startWorth ? "success" : "error"))">@SignedMoney(endWorth - startWorth)</span>)
+                </MudText>
+            </MudStack>
+            <MudChart ChartType="ChartType.Bar" ChartSeries="@series" XAxisLabels="@labels" ChartOptions="@_chartOptions" Width="100%" Height="280px" />
+        </MudPaper>
+
+        <MudPaper Elevation="0" Outlined="true" Class="pa-4 mb-4">
+            <MudText Typo="Typo.h6" Class="mb-2">Monatsübersicht</MudText>
+            <MudSimpleTable Dense="true" Hover="true" Style="overflow-x: auto;">
+                <thead>
+                    <tr>
+                        <th>Monat</th>
+                        <th style="text-align: right;">Einnahmen</th>
+                        <th style="text-align: right;">Ausgaben</th>
+                        <th style="text-align: right;">Überschuss</th>
+                        <th style="text-align: right;">Kumuliert</th>
+                        <th style="text-align: right;">Sparquote</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in months.Where(m => m <= DateTime.Today))
+                    {
+                        var s = Summarize(m, m.AddMonths(1));
+                        cumulative += s.Net;
+                        <tr style="cursor: pointer;" @onclick="@(() => { _month = m; Navigation.NavigateTo("berichte/monat"); })">
+                            <td>@MonthYear(m)</td>
+                            <td style="text-align: right; color: var(--mud-palette-success);">@Money(s.Income)</td>
+                            <td style="text-align: right; color: var(--mud-palette-error);">@Money(s.Expenses)</td>
+                            <td style="text-align: right;">@SignedMoney(s.Net)</td>
+                            <td style="text-align: right;">@Money(cumulative)</td>
+                            <td style="text-align: right;">@Percent(s.SavingsRate)</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td><strong>Summe</strong></td>
+                        <td style="text-align: right;"><strong>@Money(summary.Income)</strong></td>
+                        <td style="text-align: right;"><strong>@Money(summary.Expenses)</strong></td>
+                        <td style="text-align: right;"><strong>@SignedMoney(summary.Net)</strong></td>
+                        <td></td>
+                        <td style="text-align: right;"><strong>@Percent(summary.SavingsRate)</strong></td>
+                    </tr>
+                </tfoot>
+            </MudSimpleTable>
+        </MudPaper>
+
+        <MudGrid>
+            <MudItem xs="12" md="7">
+                @CategoryTable("Ausgaben nach Kategorie", Finance.ExpensesByCategory(from, to), null, null, monthCount)
+            </MudItem>
+            <MudItem xs="12" md="5">
+                @CategoryTable("Einnahmen nach Kategorie", Finance.IncomeByCategory(from, to), null, null, monthCount)
+            </MudItem>
+        </MudGrid>
+    };
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // Vergleich
+    // ═════════════════════════════════════════════════════════════════════════
+
+    private (DateTime From, DateTime To) CompareRange(DateTime? reference) =>
+        _compareUnit == "jahr"
+            ? (new DateTime((reference ?? DateTime.Today).Year, 1, 1), new DateTime((reference ?? DateTime.Today).Year + 1, 1, 1))
+            : (FinanceState.MonthStart(reference ?? DateTime.Today), FinanceState.MonthStart(reference ?? DateTime.Today).AddMonths(1));
+
+    private string CompareLabel(DateTime? reference) =>
+        _compareUnit == "jahr" ? (reference ?? DateTime.Today).Year.ToString() : MonthYear(reference ?? DateTime.Today);
+
+    private RenderFragment ComparisonReport() => __builder =>
+    {
+        var (aFrom, aTo) = CompareRange(_compareA);
+        var (bFrom, bTo) = CompareRange(_compareB);
+        var a = Summarize(aFrom, aTo);
+        var b = Summarize(bFrom, bTo);
+        var aExp = Finance.ExpensesByCategory(aFrom, aTo).ToDictionary(x => x.Category?.Id ?? Guid.Empty, x => x.Amount);
+        var bRows = Finance.ExpensesByCategory(bFrom, bTo);
+        // Kategorien, die nur in Zeitraum A vorkommen, ebenfalls aufführen
+        var missing = Finance.ExpensesByCategory(aFrom, aTo).Where(x => bRows.All(r => r.Category?.Id != x.Category?.Id)).Select(x => (x.Category, 0m));
+        var rows = bRows.Concat(missing).ToList();
+        var labelA = CompareLabel(_compareA);
+        var labelB = CompareLabel(_compareB);
+
+        <MudPaper Elevation="0" Outlined="true" Class="pa-4 mb-4 no-print">
+            <MudGrid>
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="string" @bind-Value="_compareUnit" Label="Vergleichen nach" Variant="Variant.Outlined" Margin="Margin.Dense">
+                        <MudSelectItem Value="@("monat")">Monaten</MudSelectItem>
+                        <MudSelectItem Value="@("jahr")">Jahren</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6" sm="4">
+                    <MudDatePicker @bind-Date="_compareA" Label="Zeitraum A" Variant="Variant.Outlined" Margin="Margin.Dense" Culture="@De"
+                                   OpenTo="@(_compareUnit == "jahr" ? OpenTo.Year : OpenTo.Month)" FixDay="1" FixMonth="@(_compareUnit == "jahr" ? 1 : null)"
+                                   DateFormat="@(_compareUnit == "jahr" ? "yyyy" : "MMMM yyyy")" />
+                </MudItem>
+                <MudItem xs="6" sm="4">
+                    <MudDatePicker @bind-Date="_compareB" Label="Zeitraum B" Variant="Variant.Outlined" Margin="Margin.Dense" Culture="@De"
+                                   OpenTo="@(_compareUnit == "jahr" ? OpenTo.Year : OpenTo.Month)" FixDay="1" FixMonth="@(_compareUnit == "jahr" ? 1 : null)"
+                                   DateFormat="@(_compareUnit == "jahr" ? "yyyy" : "MMMM yyyy")" />
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        <MudPaper Elevation="0" Outlined="true" Class="pa-4 mb-4">
+            <MudSimpleTable Dense="true" Style="overflow-x: auto;">
+                <thead>
+                    <tr><th></th><th style="text-align: right;">@labelA</th><th style="text-align: right;">@labelB</th><th style="text-align: right;">Differenz</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var (label, va, vb, higherIsBetter) in new[]
+                    {
+                        ("Einnahmen", a.Income, b.Income, true),
+                        ("Ausgaben", a.Expenses, b.Expenses, false),
+                        ("Überschuss", a.Net, b.Net, true),
+                        ("Umbuchungen", a.Transfers, b.Transfers, true)
+                    })
+                    {
+                        var diff = vb - va;
+                        var good = higherIsBetter ? diff >= 0 : diff <= 0;
+                        <tr>
+                            <td>@label</td>
+                            <td style="text-align: right;">@Money(va)</td>
+                            <td style="text-align: right;">@Money(vb)</td>
+                            <td style="text-align: right;">
+                                <MudText Typo="Typo.body2" Color="@(diff == 0 ? Color.Default : good ? Color.Success : Color.Error)">
+                                    @SignedMoney(diff) @(va != 0 ? $"({(double)(diff / Math.Abs(va) * 100):+0;-0} %)" : "")
+                                </MudText>
+                            </td>
+                        </tr>
+                    }
+                    <tr>
+                        <td>Sparquote</td>
+                        <td style="text-align: right;">@Percent(a.SavingsRate)</td>
+                        <td style="text-align: right;">@Percent(b.SavingsRate)</td>
+                        <td style="text-align: right;">@((b.SavingsRate - a.SavingsRate).ToString("+0.0;-0.0", De)) Pp.</td>
+                    </tr>
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+
+        @CategoryTable($"Ausgaben nach Kategorie: {labelB} vs. {labelA}", rows, id => aExp.GetValueOrDefault(id ?? Guid.Empty), labelA)
+    };
+}

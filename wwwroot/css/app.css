@@ -112,3 +112,22 @@ code {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+/* ── MonExA ─────────────────────────────────────────────────────────────── */
+
+.mud-table-row td .mud-icon-button {
+    margin: 0 1px;
+}
+
+@media print {
+    .mud-appbar,
+    .mud-drawer,
+    .mud-snackbar-provider,
+    .no-print {
+        display: none !important;
+    }
+
+    .mud-main-content {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+}
