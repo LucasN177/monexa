@@ -83,9 +83,11 @@ Unter *Einstellungen* lassen sich die Daten jederzeit zurücksetzen.
 
 ### Cloud-Modus mit Supabase
 1. Projekt auf [supabase.com](https://supabase.com) anlegen.
-2. Inhalt von [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) im SQL-Editor ausführen
-   (Tabellen, Row Level Security, Rollen, Einladungen, Realtime). Das Skript ist idempotent und baut ein
-   bestehendes älteres MonExA-Schema verlustfrei um (Spalten werden umbenannt, Daten übernommen, Kontostände bleiben erhalten).
+2. Datenbank einrichten (Details in [`database/README.md`](database/README.md)):
+   * **Neues, leeres Projekt:** Inhalt von [`database/setup_all.sql`](database/setup_all.sql) im SQL-Editor ausführen
+     (Tabellen, Row Level Security, Rollen, Einladungen, Realtime). Die Einzelskripte liegen in `database/setup/`.
+   * **Bestehendes älteres MonExA-Schema:** stattdessen [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql)
+     ausführen – baut die alten Tabellen verlustfrei um (Spalten werden umbenannt, Daten übernommen, Kontostände bleiben erhalten).
 3. Für die lokale Entwicklung URL und **anon/publishable Key** (Settings → API) in
    `wwwroot/appsettings.Development.json` eintragen (Datei ist per `.gitignore` ausgeschlossen):
    ```json
