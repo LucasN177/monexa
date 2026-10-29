@@ -1,0 +1,20 @@
+@* Startbildschirm im selben Look wie der Ladebildschirm in wwwroot/index.html.
+   Wird gezeigt, solange nach dem App-Download noch Anmeldung oder Finanzdaten laden. *@
+<div class="monexa-splash" role="status" aria-live="polite">
+    <div class="monexa-splash__content" style="animation: none;">
+        <div class="monexa-splash__logo-wrap">
+            <div class="monexa-splash__glow"></div>
+            <div class="monexa-splash__logo-backing"></div>
+            <img class="monexa-splash__logo" src="Resources/MonexaIconTransparent.png" alt="MonExA" width="104" height="104" />
+        </div>
+        <h1 class="monexa-splash__title">Mon<span>Ex</span>A</h1>
+        <p class="monexa-splash__tagline">Money · Expenses · Analysis</p>
+        <div class="monexa-splash__progress monexa-splash__progress--indeterminate"><div class="monexa-splash__bar"></div></div>
+        <p class="monexa-splash__status">@Status</p>
+    </div>
+    <p class="monexa-splash__credit">by <strong>Lucas Nagelsmann</strong></p>
+</div>
+
+@code {
+    [Parameter] public string Status { get; set; } = "Wird gestartet …";
+}

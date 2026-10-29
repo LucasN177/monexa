@@ -67,38 +67,225 @@ a, .btn-link {
         content: "An error has occurred."
     }
 
-.loading-progress {
+/* ── Startbildschirm ────────────────────────────────────────────────────────
+   Wird in index.html angezeigt, solange Blazor lädt (Fortschritt über
+   --blazor-load-percentage), und von Shared/LoadingScreen.razor weiterverwendet,
+   während die App startet und Daten lädt. */
+
+.monexa-splash {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem 1rem;
+    overflow: hidden;
+    color: #e8eefc;
+    font-family: Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background: radial-gradient(120% 90% at 50% 30%, #0d2f6b 0%, #03173d 55%, #010a1c 100%);
+}
+
+    /* Weiche, langsam treibende Lichtflächen im Hintergrund */
+    .monexa-splash::before,
+    .monexa-splash::after {
+        content: "";
+        position: absolute;
+        width: 55vmax;
+        height: 55vmax;
+        border-radius: 50%;
+        filter: blur(60px);
+        opacity: 0.35;
+        pointer-events: none;
+        animation: monexa-drift 14s ease-in-out infinite alternate;
+    }
+
+    .monexa-splash::before {
+        top: -25vmax;
+        left: -20vmax;
+        background: radial-gradient(circle, #1e88e5 0%, transparent 65%);
+    }
+
+    .monexa-splash::after {
+        bottom: -30vmax;
+        right: -20vmax;
+        background: radial-gradient(circle, #26a69a 0%, transparent 65%);
+        animation-delay: -7s;
+    }
+
+.monexa-splash__content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    animation: monexa-rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.monexa-splash__logo-wrap {
+    position: relative;
+    width: 104px;
+    height: 104px;
+    margin-bottom: 1.75rem;
+}
+
+.monexa-splash__glow {
+    position: absolute;
+    inset: -28px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(100, 181, 246, 0.45) 0%, rgba(100, 181, 246, 0) 70%);
+    animation: monexa-pulse 2.6s ease-in-out infinite;
+}
+
+/* Die weißen Logo-Elemente sind im PNG transparent ausgespart – weiße Fläche dahinter,
+   innerhalb der abgerundeten Kachel, damit sie auf dem dunklen Hintergrund weiß bleiben. */
+.monexa-splash__logo-backing {
+    position: absolute;
+    inset: 16%;
+    border-radius: 18%;
+    background: #ffffff;
+    animation: monexa-float 3.2s ease-in-out infinite;
+}
+
+.monexa-splash__logo {
     position: relative;
     display: block;
-    width: 8rem;
-    height: 8rem;
-    margin: 20vh auto 1rem auto;
+    width: 104px;
+    height: 104px;
+    filter: drop-shadow(0 12px 28px rgba(0, 0, 0, 0.45));
+    animation: monexa-float 3.2s ease-in-out infinite;
 }
 
-    .loading-progress circle {
-        fill: none;
-        stroke: #e0e0e0;
-        stroke-width: 0.6rem;
-        transform-origin: 50% 50%;
-        transform: rotate(-90deg);
+.monexa-splash__title {
+    margin: 0;
+    font-size: 2.5rem;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: 0.01em;
+    color: #ffffff;
+}
+
+    .monexa-splash__title span {
+        background: linear-gradient(90deg, #64b5f6, #4db6ac);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
     }
 
-        .loading-progress circle:last-child {
-            stroke: #1b6ec2;
-            stroke-dasharray: calc(3.141 * var(--blazor-load-percentage, 0%) * 0.8), 500%;
-            transition: stroke-dasharray 0.05s ease-in-out;
-        }
+.monexa-splash__tagline {
+    margin: 0.5rem 0 2.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: rgba(232, 238, 252, 0.6);
+}
 
-.loading-progress-text {
+.monexa-splash__progress {
+    position: relative;
+    width: min(240px, 70vw);
+    height: 4px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.monexa-splash__bar {
+    height: 100%;
+    width: var(--blazor-load-percentage, 4%);
+    min-width: 4%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #42a5f5, #4db6ac);
+    box-shadow: 0 0 12px rgba(66, 165, 245, 0.7);
+    transition: width 0.25s ease-out;
+}
+
+/* Nach dem Download der App (unbestimmte Dauer): wandernder Balken */
+.monexa-splash__progress--indeterminate .monexa-splash__bar {
+    width: 40%;
+    animation: monexa-indeterminate 1.3s ease-in-out infinite;
+}
+
+.monexa-splash__status {
+    margin: 0.85rem 0 0;
+    min-height: 1.2em;
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+    color: rgba(232, 238, 252, 0.7);
+}
+
+    .monexa-splash__status--percent::after {
+        content: var(--blazor-load-percentage-text, "Wird geladen …");
+    }
+
+.monexa-splash__credit {
     position: absolute;
+    left: 0;
+    right: 0;
+    bottom: max(1.5rem, env(safe-area-inset-bottom));
+    z-index: 1;
+    margin: 0;
     text-align: center;
-    font-weight: bold;
-    inset: calc(20vh + 3.25rem) 0 auto 0.2rem;
+    font-size: 0.8rem;
+    letter-spacing: 0.06em;
+    color: rgba(232, 238, 252, 0.45);
 }
 
-    .loading-progress-text:after {
-        content: var(--blazor-load-percentage-text, "Loading");
+    .monexa-splash__credit strong {
+        font-weight: 500;
+        color: rgba(232, 238, 252, 0.75);
     }
+
+@keyframes monexa-rise {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: none; }
+}
+
+@keyframes monexa-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+
+@keyframes monexa-pulse {
+    0%, 100% { opacity: 0.55; transform: scale(0.92); }
+    50% { opacity: 1; transform: scale(1.05); }
+}
+
+@keyframes monexa-drift {
+    from { transform: translate(0, 0) scale(1); }
+    to { transform: translate(6vmax, 4vmax) scale(1.1); }
+}
+
+@keyframes monexa-indeterminate {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(250%); }
+}
+
+@media (max-height: 520px) {
+    .monexa-splash__logo-wrap { width: 72px; height: 72px; margin-bottom: 1rem; }
+    .monexa-splash__logo { width: 72px; height: 72px; }
+    .monexa-splash__title { font-size: 2rem; }
+    .monexa-splash__tagline { margin-bottom: 1.25rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .monexa-splash::before,
+    .monexa-splash::after,
+    .monexa-splash__content,
+    .monexa-splash__glow,
+    .monexa-splash__logo-backing,
+    .monexa-splash__logo {
+        animation: none;
+    }
+
+    .monexa-splash__progress--indeterminate .monexa-splash__bar {
+        width: 100%;
+        animation: none;
+        opacity: 0.7;
+    }
+}
 
 code {
     color: #c02d76;

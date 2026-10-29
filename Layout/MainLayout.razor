@@ -127,9 +127,7 @@
 
         @if (!Auth.IsAuthenticated)
         {
-            <MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
-                <MudProgressCircular Indeterminate="true" />
-            </MudContainer>
+            <LoadingScreen Status="Weiterleitung zur Anmeldung …" />
         }
         else if (Finance.LoadError != null && !Finance.IsLoaded)
         {
@@ -143,10 +141,7 @@
         }
         else if (!Finance.IsLoaded)
         {
-            <MudStack AlignItems="AlignItems.Center" Class="mt-16">
-                <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
-                <MudText Typo="Typo.body2">Lade Finanzdaten …</MudText>
-            </MudStack>
+            <LoadingScreen Status="Lade Finanzdaten …" />
         }
         else
         {
